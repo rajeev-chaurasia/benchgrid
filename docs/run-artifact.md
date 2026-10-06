@@ -168,19 +168,27 @@ otherwise, for example `timeout`, `preflight:load1`, `preempted:fence`.
 `FAILED` and `INVALID` runs still write `samples.jsonl`, possibly partial and
 possibly empty. They are evidence of what happened, never inputs to a baseline.
 
-### Comparability
+### Identity and provenance
 
-`spec_sha256`, `rig.hardware_class`, `rig.arch` and `rig.emulated` together say
-whether two runs measured the same thing on the same kind of hardware.
-`kernel`, `driver_version` and `governor` are recorded so a consumer can
-annotate a comparison, and benchgrid does not treat a difference in them as
-making two runs incomparable. An experiment that needs a specific driver says
-so in its requirements, and then no run of it can land on a rig without one.
+`spec_sha256` identifies the exact experiment, and the spec includes
+`revision` and `artifacts`, so it changes with every build. It says which
+experiment a run belongs to. It does not say which runs are comparable across
+commits, and benchgrid defines no such key: deciding what to compare is the
+consumer's job.
 
-`environment.git_revision` is the full 40 character commit id; the spec
-rejects an abbreviated one. `binary_sha256` is always present.
-`config_sha256` is 64 hex characters when the experiment has a config file
-and `null` when it does not, never an empty string.
+`rig.hardware_class`, `rig.arch` and `rig.emulated` say what kind of rig ran
+it. `kernel`, `driver_version` and `governor` are recorded as found. An
+experiment that needs a specific driver says so in its requirements, and then
+no run of it can land on a rig without one.
+
+`environment.git_revision` always equals `spec.revision`, a full 40 character
+commit id; the spec rejects an abbreviated one. `environment.binary_sha256`
+always equals `spec.artifacts.binary_sha256`, by construction: the agent
+hashes the binary it fetched and refuses to run one that differs, which
+produces a `FAILED` run with reason `artifact:...` and no samples.
+`environment.config_sha256` is 64 hex characters when
+`spec.artifacts.config_sha256` is present and `null` when the spec leaves it
+out, never an empty string.
 
 `preflight_before` and `preflight_after` use the unit vocabulary: `load1` is
 unitless, `cpu_util` and `gpu_util` are ratios, `mem_free` is bytes, `temp_c`
