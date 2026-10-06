@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	mrand "math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,6 +36,10 @@ type Server struct {
 	LeaseTTL time.Duration
 	Log      *slog.Logger
 	Registry *prometheus.Registry
+	// FaultArtifactErrorRate is fault injection for the evidence harness
+	// only: the fraction of artifact writes answered with 503 before anything
+	// is stored, which is what an object store outage looks like to a client.
+	FaultArtifactErrorRate float64
 
 	heartbeats  prometheus.Counter
 	completions *prometheus.CounterVec
@@ -349,7 +354,18 @@ func attemptFromPath(r *http.Request) (string, int, bool) {
 	return r.PathValue("run"), n, true
 }
 
+func (s *Server) injectFault(w http.ResponseWriter) bool {
+	if s.FaultArtifactErrorRate > 0 && mrand.Float64() < s.FaultArtifactErrorRate {
+		http.Error(w, "injected artifact store fault", http.StatusServiceUnavailable)
+		return true
+	}
+	return false
+}
+
 func (s *Server) putArtifact(w http.ResponseWriter, r *http.Request) {
+	if s.injectFault(w) {
+		return
+	}
 	run, attempt, ok := attemptFromPath(r)
 	if !ok {
 		http.NotFound(w, r)
@@ -360,6 +376,9 @@ func (s *Server) putArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) seal(w http.ResponseWriter, r *http.Request) {
+	if s.injectFault(w) {
+		return
+	}
 	run, attempt, ok := attemptFromPath(r)
 	if !ok {
 		http.NotFound(w, r)

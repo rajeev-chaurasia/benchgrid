@@ -30,6 +30,7 @@ func main() {
 	tick := flag.Duration("tick", 200*time.Millisecond, "scheduling interval")
 	noSched := flag.Bool("no-scheduler", false, "serve the API only")
 	freeze := flag.Float64("fault-freeze-before-dispatch", 0, "evidence harness only: probability of SIGSTOP between lease and dispatch")
+	artifactFaults := flag.Float64("fault-artifact-error-rate", 0, "evidence harness only: fraction of artifact writes answered 503")
 	flag.Parse()
 
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})).With("instance", *id)
@@ -49,7 +50,7 @@ func main() {
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	srv := &server.Server{DB: pool, Store: &artifact.FSStore{Root: *artifacts}, LeaseTTL: *ttl, Log: log, Registry: reg}
+	srv := &server.Server{DB: pool, Store: &artifact.FSStore{Root: *artifacts}, LeaseTTL: *ttl, Log: log, Registry: reg, FaultArtifactErrorRate: *artifactFaults}
 	httpSrv := &http.Server{Addr: *listen, Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
 
 	if !*noSched {
