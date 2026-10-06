@@ -1,0 +1,17 @@
+{
+  "benchmark": "cpu_hash",
+  "revision": "0000000000000000000000000000000000000000",
+  "command": ["{binary}", "-rounds", "200000"],
+  "warmups": 5,
+  "repetitions": 30,
+  "timeout_seconds": 300,
+  "requirements": {"allow_emulated": true},
+  "environment": {"max_cpu_util": 0.5, "preflight_timeout_seconds": 30},
+  "metrics": [
+    {"name": "iteration_latency", "unit": "ns", "direction": "lower_is_better"},
+    {"name": "cpu_user", "unit": "ns", "direction": "lower_is_better"},
+    {"name": "max_rss", "unit": "bytes", "direction": "lower_is_better"},
+    {"name": "throughput", "unit": "ops_per_s", "direction": "higher_is_better"}
+  ],
+  "artifacts": {"binary_sha256": "0000000000000000000000000000000000000000000000000000000000000000"}
+}
