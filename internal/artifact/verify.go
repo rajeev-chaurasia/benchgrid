@@ -64,6 +64,12 @@ func Verify(dir string) (Run, []Sample, error) {
 	if h, err := spec.Spec.SHA256(run.Spec); err != nil || h != run.SpecSHA256 {
 		return fail("spec_sha256 does not match the embedded spec")
 	}
+	env := run.Environment
+	wantConfig := run.Spec.Artifacts.ConfigSHA256
+	if env.GitRevision != run.Spec.Revision || env.BinarySHA256 != run.Spec.Artifacts.BinarySHA256 ||
+		(env.ConfigSHA256 == nil) != (wantConfig == "") || (env.ConfigSHA256 != nil && *env.ConfigSHA256 != wantConfig) {
+		return fail("environment provenance does not match the spec")
+	}
 	switch run.Status {
 	case Succeeded:
 		if run.StatusReason != "" {

@@ -35,6 +35,7 @@ func fixture(t *testing.T) (Run, []Sample) {
 	run := Run{
 		SchemaVersion: RunSchema, RunID: "exp_test", Attempt: 2, Fence: 9,
 		Status: Succeeded, SpecSHA256: h, Spec: s, Summary: Summarize(s, samples),
+		Environment: Environment{GitRevision: s.Revision, BinarySHA256: s.Artifacts.BinarySHA256},
 	}
 	return run, samples
 }
@@ -81,6 +82,11 @@ func TestVerifyRejects(t *testing.T) {
 		"attempt not path":      func(r *Run, _ *[]Sample) { r.Attempt = 3 },
 		"succeeded with reason": func(r *Run, _ *[]Sample) { r.StatusReason = "timeout" },
 		"failed without reason": func(r *Run, _ *[]Sample) { r.Status = Failed },
+		"other binary measured": func(r *Run, _ *[]Sample) { r.Environment.BinarySHA256 = strings.Repeat("c", 64) },
+		"empty config hash": func(r *Run, _ *[]Sample) {
+			empty := ""
+			r.Environment.ConfigSHA256 = &empty
+		},
 	}
 	for label, mutate := range cases {
 		run, samples := fixture(t)
