@@ -11,20 +11,34 @@ if they disagree, so the rules for computing them are spelled out exactly.
 ## Layout
 
 ```
-<store>/runs/<run_id>/attempt-<fence>/
+<store>/runs/<run_id>/attempt-<attempt>/
     run.json
     samples.jsonl
     manifest.json
 ```
 
 `run_id` is the experiment id, so every attempt at one experiment lands under
-one directory. `fence` is the lease token the attempt ran under, written in
-decimal with no padding. Two attempts can never share a directory, because two
-attempts can never hold the same token.
+one directory. `attempt` is a counter on the experiment row, incremented in the
+same transaction that claims the experiment for scheduling, and written in
+decimal with no padding. It starts at 1. Two attempts at one experiment can
+never share a number, because the claim and the increment are one statement.
 
-A consumer ingests only the sealed attempt with the highest fence for a
-`run_id`. Lower attempts are kept, because they explain why a run took three
-tries, but they are never results.
+The lease fence is not the attempt identity and must not be used as one. The
+fence is counted per rig, so a retry that lands on a different rig can carry a
+smaller fence than the attempt it replaced, and two attempts on two rigs can
+carry the same fence. The fence is recorded in `run.json` for audit and does
+its real job at the rig, nowhere else.
+
+A consumer ingests only the sealed attempt with the highest `attempt` for a
+`run_id`, and checks that `run_id` and `attempt` in `run.json` match the
+directory path. Lower attempts are kept, because they explain why a run took
+three tries, but they are never results.
+
+An attempt that was superseded on another rig can still seal after its
+replacement started, since the old rig was never told to stop. Both are genuine
+measurements of the same spec on comparable hardware. A consumer may show the
+lower one until the higher one seals, and must prefer the higher one once it
+does.
 
 ## Sealing
 
@@ -74,6 +88,7 @@ mismatch as a corrupt run.
 {
   "schema_version": "benchgrid.run/v1",
   "run_id": "exp_01J...",
+  "attempt": 2,
   "fence": 109,
   "status": "SUCCEEDED",
   "status_reason": "",
@@ -115,6 +130,23 @@ mismatch as a corrupt run.
 }
 ```
 
+### Identity fields
+
+| field | meaning |
+| --- | --- |
+| `run_id` | the experiment id; there is no separate `experiment_id` field |
+| `attempt` | the attempt counter, matches the directory name |
+| `fence` | the lease token the attempt ran under, on rig `rig.rig_id`; audit only |
+| `spec_sha256` | see below |
+
+### spec_sha256
+
+The lowercase hex sha256 of the RFC 8785 (JCS) canonical serialization of the
+`spec` object exactly as it appears in `run.json`. A consumer can and should
+recompute it. Spec numbers are restricted to integers and to decimals that
+round-trip through float64, so the JCS number rule never has to format an
+exponent.
+
 ### status
 
 | status | meaning |
@@ -144,14 +176,17 @@ is celsius. A reading the rig cannot take is `null`, never zero.
 
 ## samples.jsonl
 
-One JSON object per line, one line per iteration, warmups included:
+One JSON object per line, one line per (metric, iteration), warmups included:
 
 ```json
 {"metric": "iteration_latency", "iteration": 0, "warmup": true, "value": 1834221, "unit": "ns", "t_offset_ns": 0}
 ```
 
 - `iteration` counts from 0 across warmups and measured repetitions together,
-  in execution order.
+  in execution order, and is contiguous from 0 within each metric.
+- Every `metric` and `unit` must be declared in `spec.metrics`, and must match
+  the unit of that metric's summary. A consumer rejects a run that has either
+  wrong.
 - `t_offset_ns` is the time since the first warmup started, on the rig's
   monotonic clock, so drift within a run is visible and not only drift between
   runs.
@@ -168,17 +203,26 @@ measured values sorted ascending and `n` their count:
 | `mean` | arithmetic mean |
 | `median` | percentile 50 by the rule below |
 | `p90`, `p95`, `p99` | percentiles by the rule below |
-| `stddev` | sample standard deviation, divisor `n - 1`; `0` when `n < 2` |
+| `stddev` | sample standard deviation, divisor `n - 1`; `null` when `n < 2` |
 | `mad` | median of `abs(x_i - median)`, raw, not scaled by 1.4826 |
-| `cv` | `stddev / mean`; `null` when `mean` is 0 |
+| `cv` | `stddev / mean`; `null` when `stddev` is null or `mean` is 0 |
+
+When `n` is 0, which happens for a `FAILED` or `INVALID` run that measured
+nothing, the metric's summary is present with `n: 0` and every other numeric
+field `null`. A writer never emits zeros for a quantity it did not measure.
 
 Percentiles use linear interpolation between closest ranks, which is numpy's
 default and Hyndman and Fan type 7: for percentile `p` the rank is
 `h = (n - 1) * p / 100`, and the value is
-`x[floor(h)] + (h - floor(h)) * (x[floor(h) + 1] - x[floor(h)])`.
+`x[floor(h)] + (h - floor(h)) * (x[floor(h) + 1] - x[floor(h)])`, except that
+when `floor(h) = n - 1` the value is `x[n - 1]`.
 
-A consumer recomputing these should agree to within `1e-9` relative. benchgrid
-computes in float64 from the same integers it wrote to `samples.jsonl`.
+A consumer recomputing these agrees when
+`abs(a - b) <= 1e-9 * max(abs(a), abs(b)) + 1e-12`. The absolute term is there
+because a purely relative tolerance can never be met when the true value is 0,
+as `mad` is on constant data. benchgrid computes in float64 from the same
+numbers it wrote to `samples.jsonl`, and `internal/stats` is tested against
+numpy output.
 
 ## Metric direction
 
