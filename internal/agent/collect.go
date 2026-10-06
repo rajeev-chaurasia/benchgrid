@@ -107,6 +107,11 @@ func (a *Agent) flush(ctx context.Context, p pending) bool {
 	}
 	if !p.Uploaded {
 		if err := a.upload(ctx, p); err != nil {
+			if permanent(err) {
+				a.log.Error("upload refused, keeping the run locally only", "experiment", p.ExperimentID, "attempt", p.Attempt, "dir", p.Dir, "err", err)
+				os.Remove(a.pendingPath(p))
+				return false
+			}
 			a.log.Warn("upload deferred", "experiment", p.ExperimentID, "attempt", p.Attempt, "err", err)
 			return false
 		}
@@ -116,6 +121,11 @@ func (a *Agent) flush(ctx context.Context, p pending) bool {
 	c := wire.Completion{RigID: a.cfg.RigID, Fence: p.Fence, Status: p.Status, StatusReason: p.StatusReason}
 	path := fmt.Sprintf("/v1/experiments/%s/attempts/%d/complete", p.ExperimentID, p.Attempt)
 	if err := a.post(ctx, path, c, nil); err != nil {
+		if permanent(err) {
+			a.log.Error("completion refused", "experiment", p.ExperimentID, "attempt", p.Attempt, "err", err)
+			os.Remove(a.pendingPath(p))
+			return false
+		}
 		a.log.Warn("completion deferred", "experiment", p.ExperimentID, "err", err)
 		return false
 	}
@@ -235,6 +245,13 @@ func (a *Agent) call(ctx context.Context, method, path string, body []byte, head
 		return err
 	}
 	return last
+}
+
+// permanent is a refusal that repeating cannot change. Retrying it forever
+// only hides it in a log, so the spool gives up on it and says so loudly.
+func permanent(err error) bool {
+	var se statusError
+	return errors.As(err, &se) && se.code >= 400 && se.code < 500 && se.code != 408 && se.code != 429
 }
 
 type statusError struct {
