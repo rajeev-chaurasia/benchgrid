@@ -27,6 +27,7 @@ func main() {
 	profilePath := flag.String("profile", "", "emulation profile; any profile marks the rig emulated")
 	intervalLog := flag.String("interval-log", "", "append every process and session interval here")
 	heartbeat := flag.Duration("heartbeat", time.Second, "heartbeat interval")
+	timeout := flag.Duration("request-timeout", 2*time.Second, "per request timeout to the control plane; keep well inside the lease TTL")
 	unfenced := flag.Bool("unfenced-negative-control", false, "evidence harness only: accept every dispatch regardless of fence")
 	flag.Parse()
 
@@ -50,7 +51,7 @@ func main() {
 	a, err := agent.New(agent.Config{
 		RigID: *id, StateDir: *stateDir, ControlURLs: strings.Split(*control, ","),
 		Endpoint: *endpoint, Fenced: !*unfenced, Prober: prober,
-		HeartbeatEvery: *heartbeat, IntervalLog: *intervalLog, Logger: log,
+		HeartbeatEvery: *heartbeat, RequestTimeout: *timeout, IntervalLog: *intervalLog, Logger: log,
 	})
 	if err != nil {
 		log.Error("agent", "err", err)

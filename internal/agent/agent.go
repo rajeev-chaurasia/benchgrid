@@ -47,6 +47,11 @@ type Config struct {
 	Fenced         bool
 	Prober         *probe.Prober
 	HeartbeatEvery time.Duration
+	// RequestTimeout bounds every call to the control plane. A frozen replica
+	// accepts the connection and never answers, so this, not the TCP stack, is
+	// what decides how quickly the agent moves on to another replica, and it
+	// has to be well inside the lease TTL.
+	RequestTimeout time.Duration
 	IntervalLog    string
 	// CrashLimit consecutive crashed attempts quarantine the rig. A benchmark
 	// that crashes once is the benchmark's problem; one that crashes on every
@@ -88,6 +93,9 @@ func New(cfg Config) (*Agent, error) {
 	if cfg.HeartbeatEvery == 0 {
 		cfg.HeartbeatEvery = time.Second
 	}
+	if cfg.RequestTimeout == 0 {
+		cfg.RequestTimeout = 2 * time.Second
+	}
 	if cfg.CrashLimit == 0 {
 		cfg.CrashLimit = 3
 	}
@@ -114,7 +122,7 @@ func New(cfg Config) (*Agent, error) {
 		cfg:       cfg,
 		fence:     fs,
 		intervals: iv,
-		client:    &http.Client{Timeout: 10 * time.Second},
+		client:    &http.Client{Timeout: cfg.RequestTimeout},
 		log:       cfg.Logger.With("rig", cfg.RigID),
 		epoch:     time.Now(),
 		state:     StateReady,
@@ -230,6 +238,19 @@ func (a *Agent) Accept(d wire.Dispatch) wire.DispatchReply {
 		}
 		for s := range a.active {
 			<-s.execDone
+		}
+	}
+
+	if !a.cfg.Fenced {
+		// The control still keeps the mark, without acting on it, so the
+		// evidence can count how many stale dispatches reached the rig in both
+		// modes rather than only in the one that refuses them.
+		if high := a.fence.High(); d.Fence < high {
+			now := a.clock()
+			a.intervals.Record(Interval{RigID: a.cfg.RigID, Kind: "stale_accepted", Fence: d.Fence,
+				ExperimentID: d.ExperimentID, Attempt: d.Attempt, StartNS: now, EndNS: now})
+		} else if d.Fence > high {
+			a.fence.Advance(d.Fence)
 		}
 	}
 
