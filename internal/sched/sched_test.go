@@ -168,7 +168,7 @@ func TestUnreachableDispatchIsReapedAfterLeaseLapses(t *testing.T) {
 	db := testdb.Open(t, "sched")
 	addRig(t, db, capability.Rig{RigID: "r", Emulated: true, Endpoint: "http://127.0.0.1:1"})
 	submit(t, db, "exp_lost", baseSpec(), 3)
-	sc := New(Config{ID: "t", LeaseTTL: 150 * time.Millisecond}, db, nil)
+	sc := New(Config{ID: "t", LeaseTTL: 150 * time.Millisecond, HeartbeatStale: 100 * time.Millisecond, Settle: time.Nanosecond}, db, nil)
 	placed, _ := sc.Place(ctx)
 	sc.dispatch(ctx, placed[0])
 	if e := load(t, db, "exp_lost"); e.state != "RUNNING" {
@@ -180,7 +180,7 @@ func TestUnreachableDispatchIsReapedAfterLeaseLapses(t *testing.T) {
 	}
 	time.Sleep(250 * time.Millisecond)
 	sc.Reap(ctx)
-	if e := load(t, db, "exp_lost"); e.state != "QUEUED" || e.reason != "lease_expired" {
+	if e := load(t, db, "exp_lost"); e.state != "QUEUED" || e.reason != "rig_silent" {
 		t.Errorf("%+v", e)
 	}
 	var st string
@@ -253,6 +253,38 @@ func TestRetryPolicy(t *testing.T) {
 				t.Errorf("%+v", e)
 			}
 		})
+	}
+}
+
+// After a control plane outage every lease has lapsed while the work is still
+// running. A lapsed lease on a rig that has not reported since is not reaped
+// until the rig has had its staleness window to speak, and a heartbeat that
+// renews the fence ends the question.
+func TestLapsedLeaseIsNotReapedWhileTheRigMightStillVouch(t *testing.T) {
+	db := testdb.Open(t, "sched")
+	p := placeOne(t, db, "exp_outage", 3)
+	sc := New(Config{ID: "t", HeartbeatStale: time.Hour, Settle: time.Nanosecond}, db, nil)
+	db.Exec(ctx, `UPDATE rigs SET expires_at = clock_timestamp() - interval '1 minute', last_heartbeat = clock_timestamp() - interval '2 minutes'`)
+	sc.Reap(ctx)
+	if e := load(t, db, "exp_outage"); e.state != "RUNNING" {
+		t.Fatalf("reaped on a lapsed lease alone: %+v", e)
+	}
+	db.Exec(ctx, `UPDATE rigs SET last_heartbeat = clock_timestamp()`)
+	sc.Reap(ctx)
+	if e := load(t, db, "exp_outage"); e.state != "QUEUED" || e.reason != "lease_not_renewed" {
+		t.Errorf("a heartbeat that did not renew should have proved the attempt dead: %+v", e)
+	}
+	_ = p
+}
+
+func TestReaperSettlesAfterAGap(t *testing.T) {
+	db := testdb.Open(t, "sched")
+	placeOne(t, db, "exp_gap", 3)
+	db.Exec(ctx, `UPDATE rigs SET expires_at = clock_timestamp() - interval '1 minute', last_heartbeat = clock_timestamp()`)
+	sc := New(Config{ID: "t", Settle: time.Hour}, db, nil)
+	sc.Reap(ctx)
+	if e := load(t, db, "exp_gap"); e.state != "RUNNING" {
+		t.Errorf("a freshly started reaper acted before settling: %+v", e)
 	}
 }
 

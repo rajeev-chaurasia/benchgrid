@@ -35,7 +35,10 @@ type Config struct {
 	// HeartbeatStale is how long a rig may go silent before it is not offered
 	// new work. Its existing lease is governed by the TTL, not by this.
 	HeartbeatStale time.Duration
-	Batch          int
+	// Settle is how long the reaper waits after starting or after a pause
+	// before trusting its view of which agents are alive.
+	Settle time.Duration
+	Batch  int
 	// FreezeBeforeDispatch is fault injection for the evidence harness only.
 	// With this probability the scheduler stops its own process with SIGSTOP
 	// after committing a lease and before dispatching it, which is the one
@@ -46,6 +49,13 @@ type Config struct {
 }
 
 type Scheduler struct {
+	// lastPass and settleUntil exist because a scheduler that was paused, or
+	// cut off from the database, wakes with a view of rig liveness that is as
+	// old as the pause. Every lease looks expired and every heartbeat looks
+	// stale until agents have had time to speak again.
+	lastPass    time.Time
+	settleUntil time.Time
+
 	cfg    Config
 	db     *pgxpool.Pool
 	client *http.Client
@@ -86,6 +96,9 @@ func New(cfg Config, db *pgxpool.Pool, m *Metrics) *Scheduler {
 	}
 	if cfg.HeartbeatStale == 0 {
 		cfg.HeartbeatStale = 3 * time.Second
+	}
+	if cfg.Settle == 0 {
+		cfg.Settle = cfg.HeartbeatStale + cfg.LeaseTTL
 	}
 	if cfg.Batch == 0 {
 		cfg.Batch = 16
@@ -374,18 +387,42 @@ func requeue(ctx context.Context, tx pgx.Tx, experimentID string, attempt int, r
 	return err
 }
 
-// Reap requeues every running experiment whose lease is no longer live: either
-// someone else now holds its rig, or nobody has renewed it within the TTL.
-// Agents renew through their heartbeats, so a lapsed lease means no agent is
-// running the attempt, or none can say so. If one still is and reports later,
-// its result is accepted on its own merits; see Complete in the server.
+// Reap requeues every running experiment whose lease is no longer live:
+// someone else now holds its rig, or the lease lapsed and the rig has shown it
+// is not running the attempt. A lapsed lease alone is not enough. After a
+// control plane outage every lease has lapsed while the work is still
+// running, so the reaper also needs either a heartbeat after expiry that did
+// not renew it, which means the agent is alive and not running the attempt,
+// or no heartbeat at all for the staleness window, which means the agent is
+// gone.
 func (s *Scheduler) Reap(ctx context.Context) error {
+	now := time.Now()
+	// A replica that has just started has no history either, so it settles
+	// too.
+	if s.lastPass.IsZero() || now.Sub(s.lastPass) > 5*s.cfg.Tick+time.Second {
+		s.settleUntil = now.Add(s.cfg.Settle)
+		if !s.lastPass.IsZero() {
+			s.log.Warn("resumed after a gap, not reaping until agents have reported", "gap", now.Sub(s.lastPass))
+		}
+	}
+	s.lastPass = now
+	if now.Before(s.settleUntil) {
+		return nil
+	}
 	rows, err := s.db.Query(ctx, `
 		SELECT e.id, e.attempt, e.rig_id, e.fence,
-		       CASE WHEN r.fence <> e.fence THEN 'lease_taken' ELSE 'lease_expired' END
+		       CASE WHEN r.fence <> e.fence THEN 'lease_taken'
+		            WHEN r.holder IS NULL THEN 'lease_released'
+		            WHEN r.last_heartbeat > r.expires_at THEN 'lease_not_renewed'
+		            ELSE 'rig_silent' END
 		  FROM experiments e JOIN rigs r ON r.id = e.rig_id
 		 WHERE e.state = 'RUNNING'
-		   AND (r.fence <> e.fence OR r.holder IS NULL OR r.expires_at < clock_timestamp())`)
+		   AND (r.fence <> e.fence
+		        OR r.holder IS NULL
+		        OR (r.expires_at < clock_timestamp()
+		            AND (r.last_heartbeat > r.expires_at
+		                 OR r.last_heartbeat < clock_timestamp() - make_interval(secs => $1))))`,
+		s.cfg.HeartbeatStale.Seconds())
 	if err != nil {
 		return err
 	}
