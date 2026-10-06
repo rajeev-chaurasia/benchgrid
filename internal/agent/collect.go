@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,7 +56,7 @@ func (a *Agent) collect(s *session, out outcome) error {
 		Environment: artifact.Environment{
 			GitRevision:     sp.Revision,
 			BinarySHA256:    sp.Artifacts.BinarySHA256,
-			ConfigSHA256:    sp.Artifacts.ConfigSHA256,
+			ConfigSHA256:    optional(sp.Artifacts.ConfigSHA256),
 			Governor:        out.governor,
 			PreflightBefore: out.before,
 			PreflightAfter:  out.after,
@@ -101,7 +102,7 @@ func (a *Agent) writePending(p pending) error {
 // on the server, so a step that succeeded but whose reply was lost is simply
 // repeated.
 func (a *Agent) flush(ctx context.Context, p pending) bool {
-	if a.cfg.ControlURL == "" {
+	if len(a.cfg.ControlURLs) == 0 {
 		return false
 	}
 	if !p.Uploaded {
@@ -113,8 +114,8 @@ func (a *Agent) flush(ctx context.Context, p pending) bool {
 		a.writePending(p)
 	}
 	c := wire.Completion{RigID: a.cfg.RigID, Fence: p.Fence, Status: p.Status, StatusReason: p.StatusReason}
-	url := fmt.Sprintf("%s/v1/experiments/%s/attempts/%d/complete", a.cfg.ControlURL, p.ExperimentID, p.Attempt)
-	if err := a.post(ctx, url, c, nil); err != nil {
+	path := fmt.Sprintf("/v1/experiments/%s/attempts/%d/complete", p.ExperimentID, p.Attempt)
+	if err := a.post(ctx, path, c, nil); err != nil {
 		a.log.Warn("completion deferred", "experiment", p.ExperimentID, "err", err)
 		return false
 	}
@@ -123,16 +124,16 @@ func (a *Agent) flush(ctx context.Context, p pending) bool {
 }
 
 func (a *Agent) upload(ctx context.Context, p pending) error {
-	base := fmt.Sprintf("%s/v1/artifacts/runs/%s/attempt-%d", a.cfg.ControlURL, p.ExperimentID, p.Attempt)
+	base := fmt.Sprintf("/v1/artifacts/runs/%s/attempt-%d", p.ExperimentID, p.Attempt)
 	for _, name := range []string{artifact.RunFile, artifact.SamplesFile} {
 		b, err := os.ReadFile(filepath.Join(p.Dir, name))
 		if err != nil {
 			return err
 		}
 		sum := sha256.Sum256(b)
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPut, base+"/"+name, bytes.NewReader(b))
-		req.Header.Set(wire.SHA256Header, hex.EncodeToString(sum[:]))
-		if err := a.do(req, nil); err != nil {
+		h := http.Header{}
+		h.Set(wire.SHA256Header, hex.EncodeToString(sum[:]))
+		if err := a.call(ctx, http.MethodPut, base+"/"+name, b, h, nil); err != nil {
 			return err
 		}
 	}
@@ -140,8 +141,7 @@ func (a *Agent) upload(ctx context.Context, p pending) error {
 	if err != nil {
 		return err
 	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, base+"/seal", bytes.NewReader(manifest))
-	return a.do(req, nil)
+	return a.call(ctx, http.MethodPost, base+"/seal", manifest, nil, nil)
 }
 
 func (a *Agent) spoolLoop(ctx context.Context) {
@@ -181,38 +181,92 @@ func (a *Agent) heartbeatLoop(ctx context.Context) {
 }
 
 func (a *Agent) heartbeat(ctx context.Context) {
-	if a.cfg.ControlURL == "" {
+	if len(a.cfg.ControlURLs) == 0 {
 		return
 	}
 	hb := a.Snapshot()
 	hb.Readings = a.cfg.Prober.Read(ctx)
-	if err := a.post(ctx, a.cfg.ControlURL+"/v1/rigs/"+a.cfg.RigID+"/heartbeat", hb, nil); err != nil {
+	if err := a.post(ctx, "/v1/rigs/"+a.cfg.RigID+"/heartbeat", hb, nil); err != nil {
 		a.log.Debug("heartbeat failed", "err", err)
 	}
 }
 
-func (a *Agent) post(ctx context.Context, url string, body, into any) error {
+func (a *Agent) post(ctx context.Context, path string, body, into any) error {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
-	return a.do(req, into)
+	return a.call(ctx, http.MethodPost, path, b, nil, into)
 }
 
-func (a *Agent) do(req *http.Request, into any) error {
-	resp, err := a.client.Do(req)
-	if err != nil {
+// call tries each control plane replica once, starting from the one that last
+// answered. It returns the last error if none does.
+func (a *Agent) call(ctx context.Context, method, path string, body []byte, header http.Header, into any) error {
+	urls := a.cfg.ControlURLs
+	if len(urls) == 0 {
+		return errNoControl
+	}
+	start := int(a.next.Load())
+	var last error
+	for i := 0; i < len(urls); i++ {
+		idx := (start + i) % len(urls)
+		req, err := http.NewRequestWithContext(ctx, method, urls[idx]+path, bytes.NewReader(body))
+		if err != nil {
+			return err
+		}
+		for k, v := range header {
+			req.Header[k] = v
+		}
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		resp, err := a.client.Do(req)
+		if err != nil {
+			last = err
+			continue
+		}
+		a.next.Store(int32(idx))
+		err = decodeReply(resp, into)
+		var se statusError
+		if errors.As(err, &se) && se.code >= 500 {
+			last = err
+			continue
+		}
 		return err
 	}
+	return last
+}
+
+type statusError struct {
+	code int
+	msg  string
+}
+
+func (e statusError) Error() string { return fmt.Sprintf("status %d: %s", e.code, e.msg) }
+
+func decodeReply(resp *http.Response, into any) error {
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("%s %s: %d %s", req.Method, req.URL.Path, resp.StatusCode, bytes.TrimSpace(msg))
+		return statusError{resp.StatusCode, string(bytes.TrimSpace(msg))}
 	}
-	if into != nil {
+	switch v := into.(type) {
+	case nil:
+		return nil
+	case *rawBody:
+		b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<30))
+		*v.dst = b
+		return err
+	default:
 		return json.NewDecoder(resp.Body).Decode(into)
 	}
-	return nil
+}
+
+// optional maps the spec's empty string to the contract's null: a config the
+// experiment does not have is absent, not a hash of nothing.
+func optional(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }

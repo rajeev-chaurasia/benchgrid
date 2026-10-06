@@ -295,30 +295,25 @@ func (a *Agent) fetchBinary(ctx context.Context, digest string) (string, error) 
 	if ok, _ := fileHasDigest(path, digest); ok {
 		return path, nil
 	}
-	if a.cfg.ControlURL == "" {
+	if len(a.cfg.ControlURLs) == 0 {
 		return "", errNoControl
 	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, a.cfg.ControlURL+"/v1/blobs/"+digest, nil)
-	resp, err := a.client.Do(req)
-	if err != nil {
+	var body []byte
+	if err := a.call(ctx, http.MethodGet, "/v1/blobs/"+digest, nil, nil, &rawBody{&body}); err != nil {
 		return "", fmt.Errorf("fetch: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fetch: status %d", resp.StatusCode)
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".blob-*")
 	if err != nil {
 		return "", err
 	}
 	defer os.Remove(tmp.Name())
-	h := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(tmp, h), resp.Body); err != nil {
-		tmp.Close()
-		return "", err
-	}
+	_, werr := tmp.Write(body)
 	tmp.Close()
-	if got := hex.EncodeToString(h.Sum(nil)); got != digest {
+	if werr != nil {
+		return "", werr
+	}
+	sum := sha256.Sum256(body)
+	if got := hex.EncodeToString(sum[:]); got != digest {
 		return "", fmt.Errorf("binary_sha256 mismatch: got %s", got[:12])
 	}
 	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
@@ -357,3 +352,7 @@ func (a *Agent) cleanup(s *session) error {
 	}
 	return os.RemoveAll(filepath.Join(a.cfg.StateDir, "work", s.d.ExperimentID+"-"+strconv.Itoa(s.d.Attempt)))
 }
+
+// rawBody lets call hand back an undecoded body for the one endpoint that does
+// not speak JSON.
+type rawBody struct{ dst *[]byte }

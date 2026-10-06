@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rajeev-chaurasia/benchgrid/internal/capability"
@@ -32,10 +33,13 @@ const (
 )
 
 type Config struct {
-	RigID      string
-	StateDir   string
-	ControlURL string
-	Endpoint   string
+	RigID    string
+	StateDir string
+	// ControlURLs are control plane replicas, tried in turn. An agent pinned to
+	// one replica goes dark when that replica stalls, and its leases expire
+	// under work that is still running.
+	ControlURLs []string
+	Endpoint    string
 	// Fenced is false only for the negative control, which exists to show what
 	// this agent prevents. Nothing outside the evidence harness turns it off.
 	Fenced         bool
@@ -61,6 +65,7 @@ type Agent struct {
 	client    *http.Client
 	log       *slog.Logger
 	epoch     time.Time
+	next      atomic.Int32
 
 	// mu is the admission lock. Accept holds it while preempted sessions wind
 	// down, so nothing a session does on its way out may take it, or
