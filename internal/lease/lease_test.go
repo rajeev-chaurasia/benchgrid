@@ -2,35 +2,15 @@ package lease
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rajeev-chaurasia/benchgrid/internal/store"
+	"github.com/rajeev-chaurasia/benchgrid/internal/testdb"
 )
 
-func testPool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	url := os.Getenv("BENCHGRID_TEST_DATABASE_URL")
-	if url == "" {
-		url = "postgres:///benchgrid_test?sslmode=disable"
-	}
-	ctx := context.Background()
-	pool, err := store.Open(ctx, url, 80)
-	if err != nil {
-		t.Skipf("no test database: %v", err)
-	}
-	if err := store.Migrate(ctx, pool); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Reset(ctx, pool); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
-}
+func testPool(t *testing.T) *pgxpool.Pool { return testdb.Open(t, "lease") }
 
 func addRig(t *testing.T, pool *pgxpool.Pool, id string) {
 	t.Helper()
