@@ -317,8 +317,11 @@ func (s *Scheduler) dispatch(ctx context.Context, p placement) {
 		s.log.Warn("dispatch unreachable", "experiment", p.ExperimentID, "rig", p.Rig.RigID, "err", err)
 	case reply.Accepted:
 		s.m.Dispatches.WithLabelValues("accepted").Inc()
+		// Conditional, because this scheduler may have been frozen between
+		// sending and recording, and the reaper may have abandoned the attempt
+		// in the meantime. Overwriting that would resurrect it.
 		s.db.Exec(ctx, `UPDATE attempts SET dispatched_at = clock_timestamp(), status = 'DISPATCHED'
-			WHERE experiment_id = $1 AND attempt = $2`, p.ExperimentID, p.Attempt)
+			WHERE experiment_id = $1 AND attempt = $2 AND status = 'LEASED'`, p.ExperimentID, p.Attempt)
 	default:
 		s.m.Dispatches.WithLabelValues(reply.Reason).Inc()
 		s.log.Warn("dispatch refused", "experiment", p.ExperimentID, "rig", p.Rig.RigID,

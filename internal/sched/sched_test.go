@@ -353,3 +353,21 @@ func TestConcurrentSchedulersNeverDoubleBook(t *testing.T) {
 		}
 	}
 }
+
+// A scheduler frozen between sending a dispatch and recording it can wake
+// after the reaper abandoned the attempt. Its late write must not undo that.
+func TestLateDispatchRecordDoesNotResurrect(t *testing.T) {
+	db := testdb.Open(t, "sched")
+	a := newFakeAgent(t, true, "")
+	addRig(t, db, capability.Rig{RigID: "r", Emulated: true, Endpoint: a.srv.URL})
+	submit(t, db, "exp_z", baseSpec(), 3)
+	sc := New(Config{ID: "t"}, db, nil)
+	placed, _ := sc.Place(ctx)
+	sc.abandon(ctx, "exp_z", 1, "r", placed[0].Grant.Fence, "lease_taken")
+	sc.dispatch(ctx, placed[0])
+	var st string
+	db.QueryRow(ctx, `SELECT status FROM attempts WHERE experiment_id = 'exp_z' AND attempt = 1`).Scan(&st)
+	if st != "ABANDONED" {
+		t.Errorf("abandoned attempt rewritten to %s", st)
+	}
+}
