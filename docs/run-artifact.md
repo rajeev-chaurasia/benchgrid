@@ -68,7 +68,10 @@ mismatch as a corrupt run.
 ## Conventions
 
 - Field names are `snake_case`.
-- Timestamps are RFC 3339 with nanoseconds, in UTC, ending in `Z`.
+- Timestamps are RFC 3339 in UTC, ending in `Z`. benchgrid always writes
+  exactly nine fraction digits; a consumer should accept zero to nine.
+- `run.json` is a closed schema. A field not listed here is an error, not an
+  extension, and adding one is a new schema version.
 - Every metric has exactly one unit, fixed per metric per run. Nothing is
   converted on ingest. The unit vocabulary is closed:
 
@@ -98,13 +101,16 @@ mismatch as a corrupt run.
     "rig_id": "rig-07",
     "hardware_class": "gpu-a",
     "arch": "x86_64",
+    "os": "linux",
+    "kernel": "6.8.0",
     "cpu_model": "...",
     "cpu_cores": 16,
     "mem_bytes": 68719476736,
+    "gpu_vendor": "",
     "gpu_model": "",
+    "gpu_memory_bytes": 0,
     "driver_version": "",
-    "kernel": "6.8.0",
-    "os": "linux",
+    "firmware": "",
     "emulated": true
   },
   "environment": {
@@ -143,9 +149,10 @@ mismatch as a corrupt run.
 
 The lowercase hex sha256 of the RFC 8785 (JCS) canonical serialization of the
 `spec` object exactly as it appears in `run.json`. A consumer can and should
-recompute it. Spec numbers are restricted to integers and to decimals that
-round-trip through float64, so the JCS number rule never has to format an
-exponent.
+recompute it. `internal/canon` implements JCS, including the UTF-16 key order and the
+ECMAScript number layout, and is tested against the vectors in RFC 8785. A
+JSON library's sorted-keys mode is not a substitute: it orders keys by code
+point and formats numbers such as `1e-07` and `100.0` differently.
 
 ### status
 
