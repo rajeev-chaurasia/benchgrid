@@ -51,6 +51,10 @@ type Environment struct {
 	MaxTempC                *float64 `json:"max_temp_c,omitempty"`
 	MinMemFreeBytes         int64    `json:"min_mem_free_bytes,omitempty"`
 	PreflightTimeoutSeconds int      `json:"preflight_timeout_seconds,omitempty"`
+	// GateEachIteration re-applies the gate before every iteration, not only
+	// before the first. A burst of background load that starts after preflight
+	// is otherwise measured as if it were the code.
+	GateEachIteration bool `json:"gate_each_iteration,omitempty"`
 }
 
 type Metric struct {
