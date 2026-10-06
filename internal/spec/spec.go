@@ -83,7 +83,7 @@ const BinaryPlaceholder = "{binary}"
 
 var (
 	hexSHA   = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	revision = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	revision = regexp.MustCompile(`^[0-9a-f]{40}$`)
 	name     = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 )
 
@@ -110,7 +110,9 @@ func (s Spec) Validate() error {
 		bad("benchmark %q must be lower snake case", s.Benchmark)
 	}
 	if !revision.MatchString(s.Revision) {
-		bad("revision must be 7 to 40 lowercase hex characters")
+		// An abbreviated SHA is ambiguous by design, and provenance that only
+		// probably identifies a commit is not provenance.
+		bad("revision must be a full 40 character lowercase hex commit id")
 	}
 	if len(s.Command) == 0 {
 		bad("command is empty")

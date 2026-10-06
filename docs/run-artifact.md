@@ -116,7 +116,7 @@ mismatch as a corrupt run.
   "environment": {
     "git_revision": "<40 hex>",
     "binary_sha256": "<hex>",
-    "config_sha256": "<hex>",
+    "config_sha256": null,
     "governor": "performance",
     "preflight_before": { "load1": 0.12, "cpu_util": 0.03, "mem_free": 1, "gpu_util": null, "temp_c": null },
     "preflight_after":  { "load1": 0.98, "cpu_util": 0.11, "mem_free": 1, "gpu_util": null, "temp_c": null }
@@ -176,6 +176,11 @@ whether two runs measured the same thing on the same kind of hardware.
 annotate a comparison, and benchgrid does not treat a difference in them as
 making two runs incomparable. An experiment that needs a specific driver says
 so in its requirements, and then no run of it can land on a rig without one.
+
+`environment.git_revision` is the full 40 character commit id; the spec
+rejects an abbreviated one. `binary_sha256` is always present.
+`config_sha256` is 64 hex characters when the experiment has a config file
+and `null` when it does not, never an empty string.
 
 `preflight_before` and `preflight_after` use the unit vocabulary: `load1` is
 unitless, `cpu_util` and `gpu_util` are ratios, `mem_free` is bytes, `temp_c`

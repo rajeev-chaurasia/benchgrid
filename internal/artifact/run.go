@@ -71,7 +71,7 @@ func RigFrom(c capability.Rig) Rig {
 type Environment struct {
 	GitRevision     string         `json:"git_revision"`
 	BinarySHA256    string         `json:"binary_sha256"`
-	ConfigSHA256    string         `json:"config_sha256"`
+	ConfigSHA256    *string        `json:"config_sha256"`
 	Governor        string         `json:"governor"`
 	PreflightBefore probe.Readings `json:"preflight_before"`
 	PreflightAfter  probe.Readings `json:"preflight_after"`

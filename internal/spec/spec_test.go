@@ -7,7 +7,7 @@ import (
 
 const valid = `{
   "benchmark": "cpu_hash",
-  "revision": "8f3c2aa",
+  "revision": "8f3c2aa0b6d1e4f7a9c3b5d7e9f1a3c5b7d9e1f3",
   "command": ["{binary}", "-iters", "200000"],
   "warmups": 5,
   "repetitions": 30,

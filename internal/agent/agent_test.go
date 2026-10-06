@@ -55,7 +55,7 @@ func newAgent(t *testing.T, fenced bool, profile *probe.Profile) (*Agent, string
 
 func testSpec(args ...string) spec.Spec {
 	return spec.Spec{
-		Benchmark: "cpu_hash", Revision: "8f3c2aa",
+		Benchmark: "cpu_hash", Revision: "8f3c2aa0b6d1e4f7a9c3b5d7e9f1a3c5b7d9e1f3",
 		Command: append([]string{spec.BinaryPlaceholder}, args...),
 		Warmups: 1, Repetitions: 3, TimeoutSeconds: 30,
 		Requirements: spec.Requirements{AllowEmulated: true},

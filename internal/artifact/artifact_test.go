@@ -16,7 +16,7 @@ import (
 func fixture(t *testing.T) (Run, []Sample) {
 	t.Helper()
 	s := spec.Spec{
-		Benchmark: "cpu_hash", Revision: "8f3c2aa", Command: []string{"{binary}"},
+		Benchmark: "cpu_hash", Revision: "8f3c2aa0b6d1e4f7a9c3b5d7e9f1a3c5b7d9e1f3", Command: []string{"{binary}"},
 		Warmups: 2, Repetitions: 4, TimeoutSeconds: 60,
 		Metrics: []spec.Metric{
 			{Name: "iteration_latency", Unit: "ns", Direction: "lower_is_better"},
