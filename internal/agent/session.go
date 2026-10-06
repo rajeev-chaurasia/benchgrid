@@ -162,6 +162,14 @@ func (a *Agent) execute(s *session) outcome {
 		if ctx.Err() != nil {
 			return fail(artifact.Failed, cancelReason(ctx))
 		}
+		if i > 0 && sp.Environment.GateEachIteration {
+			if _, field, ok := a.waitForGate(ctx, sp.Environment); !ok {
+				if ctx.Err() != nil {
+					return fail(artifact.Failed, cancelReason(ctx))
+				}
+				return fail(artifact.Invalid, "during:"+field)
+			}
+		}
 		r, err := runIteration(ctx, argv, a.clock, func(pid int) {
 			s.mu.Lock()
 			s.pgid = pid

@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"syscall"
 	"testing"
 	"time"
 
@@ -276,3 +278,31 @@ func TestGateTreatsUnreadableAsFailing(t *testing.T) {
 }
 
 var _ = context.Background
+
+// An agent killed mid-run leaves its benchmark behind in its own process
+// group. The next agent on the rig must kill it before measuring anything.
+func TestRestartReapsWhatTheLastAgentLeft(t *testing.T) {
+	dir := t.TempDir()
+	cmd := exec.Command(benchload, "-rounds", "10", "-hang", "-orphan")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	go cmd.Wait()
+	pg := cmd.Process.Pid
+	os.MkdirAll(filepath.Join(dir, "pgroups"), 0o755)
+	os.WriteFile(filepath.Join(dir, "pgroups", strconv.Itoa(pg)), nil, 0o644)
+	time.Sleep(100 * time.Millisecond)
+
+	a, err := New(Config{RigID: "rig-r", StateDir: dir, Fenced: true, Prober: &probe.Prober{CPUWindow: time.Millisecond}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if groupAlive(pg) {
+		killGroup(pg, 9)
+		t.Fatal("restart left the previous agent's benchmark running")
+	}
+	if a.quarantined() {
+		t.Error("a successful reap quarantined the rig")
+	}
+}
