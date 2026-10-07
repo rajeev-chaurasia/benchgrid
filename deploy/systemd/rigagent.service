@@ -9,7 +9,10 @@ After=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/benchgrid/rigagent.env
-ExecStart=/usr/local/bin/rigagent -id ${RIG_ID} -state-dir /var/lib/benchgrid -control ${CONTROL_URLS} -listen ${LISTEN} -endpoint ${ENDPOINT}
+ExecStart=/usr/local/bin/rigagent -id ${RIG_ID} -state-dir /var/lib/benchgrid -control ${CONTROL_URLS} -listen ${LISTEN} -endpoint ${ENDPOINT} -bench-cpus ${BENCH_CPUS} -cgroups
+# The agent builds its own cgroup tree under this unit's: one leaf for itself,
+# kept off the bench CPUs, and one for benchmarks that owns them.
+Delegate=yes
 StateDirectory=benchgrid
 # The agent kills its benchmarks by process group and must be the only thing
 # that does. If systemd killed the whole cgroup on stop, a restart would find

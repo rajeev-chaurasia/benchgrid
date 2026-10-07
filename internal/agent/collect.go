@@ -81,6 +81,9 @@ func (a *Agent) collect(s *session, out outcome) error {
 	if out.diagnostics != "" {
 		files[artifact.DiagnosticsFile] = []byte(out.diagnostics)
 	}
+	if out.host != nil {
+		files[artifact.HostFile] = append(out.host, '\n')
+	}
 	if err := artifact.WriteDir(dir, files); err != nil {
 		return err
 	}

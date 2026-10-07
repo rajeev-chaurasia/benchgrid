@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,16 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// hostRecord is host.json: the kernel settings, and how this agent placed
+// the benchmark on them.
+type hostRecord struct {
+	probe.HostTuning
+	BenchCPUs     []int  `json:"bench_cpus"`
+	IsolatedBench bool   `json:"isolated_bench"`
+	BenchCgroup   string `json:"bench_cgroup"`
+	Pinned        bool   `json:"pinned"`
+}
 
 // Timestamp is the contract's format: UTC, nine fraction digits, always.
 const Timestamp = "2006-01-02T15:04:05.000000000Z"
@@ -104,7 +115,10 @@ type outcome struct {
 	status, reason string
 	// diagnostics is what a person needs to see why a run did not succeed,
 	// published beside it as diagnostics.txt.
-	diagnostics   string
+	diagnostics string
+	// host is what the rig's kernel settings were for this attempt, published
+	// as host.json.
+	host          []byte
 	samples       []artifact.Sample
 	before, after probe.Readings
 	governor      string
@@ -158,6 +172,12 @@ func (a *Agent) execute(s *session) outcome {
 	defer cancel()
 
 	s.setPhase(PhasePreflight)
+	// Read before any check can fail, so every attempt, including the ones
+	// refused here, records the host it was refused on.
+	tuning := probe.ReadHostTuning(ctx, a.cfg.HostRoots)
+	desc := a.Descriptor()
+	out.host, _ = json.MarshalIndent(hostRecord{HostTuning: tuning, BenchCPUs: desc.BenchCPUs,
+		IsolatedBench: desc.IsolatedBench, BenchCgroup: a.benchCgroup, Pinned: a.self != ""}, "", "  ")
 	if why := capability.MatchSpec(sp, a.describe(ctx)); len(why) > 0 {
 		// The rig no longer is what it advertised. Nothing it measures can be
 		// trusted until an operator looks.
@@ -167,6 +187,14 @@ func (a *Agent) execute(s *session) outcome {
 	if err := a.reapStale(); err != nil {
 		a.quarantine("stale_process")
 		return fail(artifact.Invalid, "preflight:stale_process")
+	}
+	if sp.Environment.RequireIsolation && !(desc.IsolatedBench && a.self != "") {
+		return fail(artifact.Invalid, "preflight:isolation")
+	}
+	if limit := sp.Environment.MaxClockOffsetMS; limit != nil {
+		if tuning.ClockSynced == nil || !*tuning.ClockSynced || tuning.ClockOffsetMS == nil || *tuning.ClockOffsetMS > *limit {
+			return fail(artifact.Invalid, "preflight:clock")
+		}
 	}
 	binary, err := a.fetchBinary(ctx, sp.Artifacts.BinarySHA256)
 	if err != nil {
@@ -231,6 +259,13 @@ func (a *Agent) execute(s *session) outcome {
 		if sp.HasCollector("perf") {
 			perfOut = filepath.Join(workspace, fmt.Sprintf("perf-%d.csv", i))
 			cmdline = perfWrap(perfPath, argv, sp, perfOut)
+		}
+		if a.self != "" {
+			pin := []string{a.self, "pin", "--cpus", FormatCPUs(a.cfg.BenchCPUs)}
+			if a.benchCgroup != "" {
+				pin = append(pin, "--cgroup", a.benchCgroup)
+			}
+			cmdline = append(append(pin, "--"), cmdline...)
 		}
 		r, err := runIteration(ctx, iteration{
 			argv: cmdline, dir: workspace, env: benchmarkEnv(workspace, i, i < sp.Warmups), clock: a.clock,

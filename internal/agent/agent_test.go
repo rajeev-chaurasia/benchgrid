@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -510,5 +511,55 @@ func TestChangingOutputFailsAsNondeterministic(t *testing.T) {
 	a.Accept(dispatch("exp_nondet", 1, 2, testSpec("-rounds", "10", "-checksum", "pid")))
 	if st := waitDone(t, a, "exp_nondet", 1); st.Status != artifact.Failed || st.StatusReason != "nondeterministic_output" {
 		t.Errorf("%+v", st)
+	}
+}
+
+// A rig that is sent an isolation-requiring spec without being isolated is
+// not what the scheduler believed, which is the identity check's job, and the
+// host it was refused on is still recorded.
+func TestRequiredIsolationRefusesAnUnpinnedRig(t *testing.T) {
+	a, _ := newAgent(t, true, &probe.Profile{})
+	sp := testSpec("-rounds", "10")
+	sp.Environment.RequireIsolation = true
+	a.Accept(dispatch("exp_iso", 1, 1, sp))
+	if st := waitDone(t, a, "exp_iso", 1); st.Status != artifact.Invalid || st.StatusReason != "preflight:identity" {
+		t.Errorf("%+v", st)
+	}
+	b, err := os.ReadFile(filepath.Join(artifact.AttemptDir(filepath.Join(a.cfg.StateDir, "runs"), "exp_iso", 1), artifact.HostFile))
+	if err != nil || !strings.Contains(string(b), `"pinned": false`) {
+		t.Errorf("host.json missing or wrong: %s %v", b, err)
+	}
+}
+
+// On Linux, a pinned benchmark must see exactly its bench CPU from inside.
+func TestPinnedBenchmarkSeesOnlyItsCPU(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.NumCPU() < 2 {
+		t.Skip("pinning is Linux only and needs two CPUs")
+	}
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "blobs"), 0o755)
+	b, _ := os.ReadFile(benchload)
+	os.WriteFile(filepath.Join(dir, "blobs", benchloadSHA), b, 0o755)
+	// The pin shim is this agent's own executable, which in a test is the test
+	// binary, so a real rigagent is built for it to exec.
+	agentBin := filepath.Join(t.TempDir(), "rigagent")
+	if out, err := exec.Command("go", "build", "-o", agentBin, "../../cmd/rigagent").CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	a, err := New(Config{RigID: "rig-pin", StateDir: dir, Fenced: true, BenchCPUs: []int{1},
+		Prober: &probe.Prober{Profile: &probe.Profile{}, CPUWindow: time.Millisecond}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.self = agentBin
+	sp := testSpec("-rounds", "10")
+	sp.Metrics = append(sp.Metrics, spec.Metric{Name: "allowed_cpus", Unit: "count", Direction: "lower_is_better"})
+	a.Accept(dispatch("exp_pin", 1, 1, sp))
+	if st := waitDone(t, a, "exp_pin", 1); st.Status != artifact.Succeeded {
+		t.Fatalf("%+v", st)
+	}
+	run, _, _ := artifact.Verify(artifact.AttemptDir(filepath.Join(dir, "runs"), "exp_pin", 1))
+	if s := run.Summary["allowed_cpus"]; s.Median == nil || *s.Median != 1 {
+		t.Errorf("benchmark saw %v CPUs, want 1", s.Median)
 	}
 }

@@ -19,6 +19,8 @@ const (
 	ManifestFile = "manifest.json"
 	// DiagnosticsFile is present only for runs that did not succeed.
 	DiagnosticsFile = "diagnostics.txt"
+	// HostFile records the rig's kernel settings and benchmark placement.
+	HostFile = "host.json"
 
 	Succeeded = "SUCCEEDED"
 	Failed    = "FAILED"

@@ -57,6 +57,12 @@ type Config struct {
 	// attempt on one rig is more likely the rig's.
 	CrashLimit int
 	Logger     *slog.Logger
+	// BenchCPUs, on Linux, pins every benchmark to these CPUs through the pin
+	// shim, and Cgroups also places them in a cgroup that owns those CPUs.
+	BenchCPUs []int
+	Cgroups   bool
+	// HostRoots are /proc and /sys, replaceable for tests.
+	HostRoots probe.HostRoots
 }
 
 type key struct {
@@ -86,6 +92,9 @@ type Agent struct {
 	pgroups    map[int]*session
 	crashes    int
 	descriptor capability.Rig
+
+	self        string
+	benchCgroup string
 }
 
 func New(cfg Config) (*Agent, error) {
@@ -129,6 +138,21 @@ func New(cfg Config) (*Agent, error) {
 		active:    map[*session]bool{},
 		pgroups:   map[int]*session{},
 	}
+	if len(cfg.BenchCPUs) > 0 {
+		if !pinSupported() {
+			return nil, fmt.Errorf("bench CPUs: pinning is only supported on Linux")
+		}
+		if a.self, err = os.Executable(); err != nil {
+			return nil, err
+		}
+		if cfg.Cgroups {
+			// A rig without a delegated cgroup still pins, and says so in
+			// host.json, rather than refusing to start.
+			if a.benchCgroup, err = setupCgroups(cfg.BenchCPUs); err != nil {
+				a.log.Warn("no bench cgroup, pinning by affinity only", "err", err)
+			}
+		}
+	}
 	a.descriptor = a.describe(context.Background())
 	if reason, err := a.reapPrevious(); err != nil {
 		a.state, a.reason = StateQuarantined, reason
@@ -152,6 +176,17 @@ func (a *Agent) clock() int64 {
 func (a *Agent) describe(ctx context.Context) capability.Rig {
 	d := a.cfg.Prober.Describe(ctx, a.cfg.RigID)
 	d.Endpoint = a.cfg.Endpoint
+	d.BenchCPUs = append([]int{}, a.cfg.BenchCPUs...)
+	if len(d.BenchCPUs) > 0 {
+		isolated := map[int]bool{}
+		for _, c := range probe.ReadHostTuning(ctx, a.cfg.HostRoots).IsolatedCPUs {
+			isolated[c] = true
+		}
+		d.IsolatedBench = true
+		for _, c := range d.BenchCPUs {
+			d.IsolatedBench = d.IsolatedBench && isolated[c]
+		}
+	}
 	return d
 }
 

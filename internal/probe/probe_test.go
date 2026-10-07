@@ -73,3 +73,54 @@ func TestCPUFreqReportsMixed(t *testing.T) {
 		t.Errorf("no cpufreq must read as empty, got %q", got)
 	}
 }
+
+func TestReadHostTuningFromFakeRoots(t *testing.T) {
+	proc, sys := t.TempDir(), t.TempDir()
+	write := func(root, rel, v string) {
+		os.MkdirAll(filepath.Dir(filepath.Join(root, rel)), 0o755)
+		os.WriteFile(filepath.Join(root, rel), []byte(v), 0o644)
+	}
+	write(proc, "cmdline", "BOOT_IMAGE=/vmlinuz isolcpus=1 nohz_full=1\n")
+	write(proc, "sys/kernel/randomize_va_space", "2\n")
+	write(proc, "sys/vm/swappiness", "10\n")
+	write(sys, "devices/system/cpu/isolated", "1\n")
+	write(sys, "devices/system/cpu/nohz_full", "1-2,5\n")
+	write(sys, "kernel/mm/transparent_hugepage/enabled", "always madvise [never]\n")
+	write(sys, "fs/cgroup/cgroup.controllers", "cpuset cpu memory\n")
+	h := ReadHostTuning(context.Background(), HostRoots{Proc: proc, Sys: sys})
+	if len(h.IsolatedCPUs) != 1 || h.IsolatedCPUs[0] != 1 || len(h.NoHzFullCPUs) != 3 || h.THP != "never" ||
+		h.ASLR != "2" || h.Swappiness != "10" || !h.CgroupV2 {
+		t.Errorf("%+v", h)
+	}
+	empty := ReadHostTuning(context.Background(), HostRoots{Proc: t.TempDir(), Sys: t.TempDir()})
+	if len(empty.IsolatedCPUs) != 0 || empty.THP != "" || empty.CgroupV2 {
+		t.Errorf("unreadable settings must read as unknown: %+v", empty)
+	}
+}
+
+// Hand written to chronyc's documented -c tracking format: reference id,
+// name, stratum, reference time, system offset in seconds, and so on, ending
+// in the leap status.
+func TestParseChronyTracking(t *testing.T) {
+	synced, off := ParseChronyTracking("A9FEA9FE,169.254.169.254,3,1759860000.123,-0.000012345,0.000001,0.00002,-12.3,0.001,0.02,0.0005,0.0003,64.2,Normal\n")
+	if synced == nil || !*synced || off == nil || *off < 0.0123 || *off > 0.0124 {
+		t.Errorf("%v %v", synced, off)
+	}
+	synced, _ = ParseChronyTracking("00000000,,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,0.0,Not synchronised\n")
+	if synced == nil || *synced {
+		t.Error("an unsynchronised clock read as synchronised")
+	}
+	if s, o := ParseChronyTracking("garbage"); s != nil || o != nil {
+		t.Error("garbage parsed")
+	}
+}
+
+func TestParseCPUList(t *testing.T) {
+	got := ParseCPUList("0-2,5")
+	if len(got) != 4 || got[3] != 5 {
+		t.Errorf("%v", got)
+	}
+	if len(ParseCPUList("3-1")) != 0 || len(ParseCPUList("")) != 0 {
+		t.Error("bad lists must read as none")
+	}
+}

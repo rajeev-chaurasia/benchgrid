@@ -29,6 +29,10 @@ type Rig struct {
 	Tags           []string `json:"tags"`
 	Governors      []string `json:"governors"`
 	Emulated       bool     `json:"emulated"`
+	// BenchCPUs are the CPUs the agent pins benchmarks to, and IsolatedBench
+	// says whether the kernel has isolated every one of them.
+	BenchCPUs     []int `json:"bench_cpus"`
+	IsolatedBench bool  `json:"isolated_bench"`
 	// Endpoint is where the control plane reaches the agent. It is not a
 	// capability and never takes part in matching.
 	Endpoint string `json:"endpoint"`
@@ -92,6 +96,9 @@ func MatchSpec(sp spec.Spec, r Rig) []string {
 	}
 	if env.GovernorRequired && !slices.Contains(r.Governors, env.CPUGovernor) {
 		miss("cannot set governor %s", env.CPUGovernor)
+	}
+	if env.RequireIsolation && !r.IsolatedBench {
+		miss("benchmarks are not pinned to isolated CPUs")
 	}
 	for _, c := range sp.Collectors {
 		if !slices.Contains(r.Profilers, c) {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,6 +21,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "pin" {
+		// The pin shim replaces itself with the benchmark, so it only returns
+		// on failure.
+		err := agent.PinMain(os.Args[2:])
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(127)
+	}
 	id := flag.String("id", "", "rig id")
 	stateDir := flag.String("state-dir", "", "durable state: fence mark, spool, local runs")
 	control := flag.String("control", "http://127.0.0.1:8080", "comma separated control plane URLs")
@@ -30,6 +38,8 @@ func main() {
 	heartbeat := flag.Duration("heartbeat", time.Second, "heartbeat interval")
 	timeout := flag.Duration("request-timeout", 2*time.Second, "per request timeout to the control plane; keep well inside the lease TTL")
 	unfenced := flag.Bool("unfenced-negative-control", false, "evidence harness only: accept every dispatch regardless of fence")
+	benchCPUs := flag.String("bench-cpus", "", "Linux only: pin every benchmark to these CPUs, for example 1 or 2-3")
+	cgroups := flag.Bool("cgroups", false, "Linux only: also give benchmarks a cgroup owning the bench CPUs; needs Delegate=yes")
 	flag.Parse()
 
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("rig", *id)
@@ -52,6 +62,7 @@ func main() {
 	a, err := agent.New(agent.Config{
 		RigID: *id, StateDir: *stateDir, ControlURLs: strings.Split(*control, ","),
 		Endpoint: *endpoint, Fenced: !*unfenced, Prober: prober,
+		BenchCPUs: agent.ParseCPUs(*benchCPUs), Cgroups: *cgroups,
 		HeartbeatEvery: *heartbeat, RequestTimeout: *timeout, IntervalLog: *intervalLog, Logger: log,
 	})
 	if err != nil {

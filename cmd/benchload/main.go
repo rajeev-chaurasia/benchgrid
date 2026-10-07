@@ -62,6 +62,7 @@ func main() {
 	elapsed := time.Since(start)
 	fmt.Printf("BENCHGRID_METRIC throughput %.3f\n", float64(*rounds)/elapsed.Seconds())
 	fmt.Printf("BENCHGRID_METRIC work_ns %d\n", elapsed.Nanoseconds())
+	fmt.Printf("BENCHGRID_METRIC allowed_cpus %d\n", allowedCPUs())
 	switch *checksum {
 	case "":
 	case "pid":
