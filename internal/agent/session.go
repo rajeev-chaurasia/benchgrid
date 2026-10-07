@@ -211,6 +211,7 @@ func (a *Agent) execute(s *session) outcome {
 	}
 	total := sp.Warmups + sp.Repetitions
 	var first int64 = -1
+	var checksum string
 	var (
 		measuredStart time.Time
 		busyStart     float64
@@ -268,6 +269,15 @@ func (a *Agent) execute(s *session) outcome {
 		}
 		if r.ExitCode != 0 {
 			return fail(artifact.Failed, "exit:"+strconv.Itoa(r.ExitCode))
+		}
+		// A benchmark that prints a checksum is promising the same output every
+		// time. If it breaks that promise it was not measuring one thing, so its
+		// timings describe a mixture, and the run fails.
+		if i == 0 {
+			checksum = r.Checksum
+		} else if r.Checksum != checksum {
+			out.diagnostics = fmt.Sprintf("iteration 0 checksum %q, iteration %d checksum %q\n", checksum, i, r.Checksum)
+			return fail(artifact.Failed, "nondeterministic_output")
 		}
 		if i >= sp.Warmups {
 			ownNS += r.UserNS + r.SysNS

@@ -500,3 +500,15 @@ func TestThermalLimitHoldsThenRejects(t *testing.T) {
 		t.Errorf("%+v", st)
 	}
 }
+
+func TestChangingOutputFailsAsNondeterministic(t *testing.T) {
+	a, _ := newAgent(t, true, &probe.Profile{})
+	a.Accept(dispatch("exp_det", 1, 1, testSpec("-rounds", "10", "-checksum", "abc")))
+	if st := waitDone(t, a, "exp_det", 1); st.Status != artifact.Succeeded {
+		t.Fatalf("a stable checksum failed: %+v", st)
+	}
+	a.Accept(dispatch("exp_nondet", 1, 2, testSpec("-rounds", "10", "-checksum", "pid")))
+	if st := waitDone(t, a, "exp_nondet", 1); st.Status != artifact.Failed || st.StatusReason != "nondeterministic_output" {
+		t.Errorf("%+v", st)
+	}
+}

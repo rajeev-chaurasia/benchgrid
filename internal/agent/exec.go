@@ -16,21 +16,27 @@ import (
 
 // IterationResult is one execution of the benchmark command.
 type IterationResult struct {
-	PID       int
-	StartNS   int64
-	EndNS     int64
-	WallNS    int64
-	UserNS    int64
-	SysNS     int64
-	MaxRSS    int64
-	Reported  map[string]float64
+	PID      int
+	StartNS  int64
+	EndNS    int64
+	WallNS   int64
+	UserNS   int64
+	SysNS    int64
+	MaxRSS   int64
+	Reported map[string]float64
+	// Checksum is what the benchmark printed after BENCHGRID_CHECKSUM, if
+	// anything: a digest of its output, compared across iterations.
+	Checksum  string
 	ExitCode  int
 	Signal    string
 	Stderr    string
 	Cancelled bool
 }
 
-const metricPrefix = "BENCHGRID_METRIC "
+const (
+	metricPrefix   = "BENCHGRID_METRIC "
+	checksumPrefix = "BENCHGRID_CHECKSUM "
+)
 
 // grace is how long a benchmark gets between SIGTERM and SIGKILL. Long enough
 // to flush a profiler, short enough that a timeout does not hold the rig.
@@ -106,6 +112,7 @@ func runIteration(ctx context.Context, it iteration) (IterationResult, error) {
 
 	var reportErr error
 	r.Reported, reportErr = parseReported(stdout.Bytes())
+	r.Checksum = parseChecksum(stdout.Bytes())
 	var exitErr *exec.ExitError
 	if waitErr != nil && !errors.As(waitErr, &exitErr) {
 		return r, waitErr
@@ -187,4 +194,15 @@ func (l *limitedBuffer) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+func parseChecksum(out []byte) string {
+	sc := bufio.NewScanner(bytes.NewReader(out))
+	sum := ""
+	for sc.Scan() {
+		if v, ok := strings.CutPrefix(sc.Text(), checksumPrefix); ok {
+			sum = strings.TrimSpace(v)
+		}
+	}
+	return sum
 }

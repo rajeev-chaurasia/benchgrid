@@ -25,6 +25,7 @@ func main() {
 	write := flag.String("write", "", "write this file in the working directory, failing if it already exists")
 	lock := flag.Bool("lock", false, "leave a directory in the working directory that cannot be removed")
 	stderrMsg := flag.String("stderr", "", "write this to stderr")
+	checksum := flag.String("checksum", "", "print this as the output checksum; \"pid\" prints one that changes every run")
 	flag.Parse()
 
 	if *hang {
@@ -61,6 +62,13 @@ func main() {
 	elapsed := time.Since(start)
 	fmt.Printf("BENCHGRID_METRIC throughput %.3f\n", float64(*rounds)/elapsed.Seconds())
 	fmt.Printf("BENCHGRID_METRIC work_ns %d\n", elapsed.Nanoseconds())
+	switch *checksum {
+	case "":
+	case "pid":
+		fmt.Printf("BENCHGRID_CHECKSUM %d\n", os.Getpid())
+	default:
+		fmt.Printf("BENCHGRID_CHECKSUM %s\n", *checksum)
+	}
 
 	if *hang {
 		// A bare select{} would be detected as a deadlock and exit 2.
