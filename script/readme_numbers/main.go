@@ -281,7 +281,74 @@ func render(dir string) (map[string]string, error) {
 		fmt.Fprintf(&n, "| %s | %d | %d | %s | %s |\n", row.label, row.c.Succeeded, row.c.Invalid, pct(row.c.MedianCV), ms(row.c.MedianOfMedians))
 	}
 	b["noise"] = n.String()
+	var gp gpuSummary
+	if err := evidence.ReadJSON(filepath.Join(dir, "gpu", "summary.json"), &gp); err == nil {
+		var t strings.Builder
+		fmt.Fprintf(&t, "On a real %s, not emulated. Before each run the agent read the GPU's\n"+
+			"temperature at %s and its utilization at %s through nvidia-smi, and would\n"+
+			"have waited or refused above 85 C or 10%%.\n\n", gp.GPU, rangeOf(gp.PreflightTemp, "%.0f C"), rangeOf(gp.PreflightUtil, "%.0f%%", 100))
+		t.WriteString("| batch of frames | runs | not succeeded | GPU time per forward pass | frames per second | median CV |\n| --- | ---: | ---: | ---: | ---: | ---: |\n")
+		for _, size := range []string{"small", "medium", "large"} {
+			c := gp.Sizes[size]
+			label := map[string]string{"small": "4 at 192x192", "medium": "8 at 256x256", "large": "16 at 320x320"}[size]
+			ms, fps := "n/a", "n/a"
+			if c.MedianMS != nil {
+				ms = fmt.Sprintf("%.2f ms", *c.MedianMS)
+			}
+			if c.MedianFPS != nil {
+				fps = fmt.Sprintf("%.0f", *c.MedianFPS)
+			}
+			fmt.Fprintf(&t, "| %s | %d | %d | %s | %s | %s |\n", label, c.Runs, c.NotSucceeded, ms, fps, pct(c.MedianCV))
+		}
+		t.WriteString("\n| gate comparison on the GPU | verdict | change | 95% interval | pairs |\n| --- | --- | ---: | --- | ---: |\n")
+		for _, g := range gp.Gates {
+			ch, iv := "n/a", "n/a"
+			if g.Ratio != nil {
+				ch = fmt.Sprintf("%+.1f%%", (*g.Ratio-1)*100)
+				iv = fmt.Sprintf("%+.1f%% to %+.1f%%", (*g.Low-1)*100, (*g.High-1)*100)
+			}
+			fmt.Fprintf(&t, "| %s | %s | %s | %s | %d |\n", g.Label, g.Verdict, ch, iv, g.Pairs)
+		}
+		b["gcp_gpu"] = t.String()
+	}
 	return b, nil
+}
+
+type gpuSummary struct {
+	GPU           string    `json:"gpu"`
+	PreflightTemp []float64 `json:"preflight_temp_c"`
+	PreflightUtil []float64 `json:"preflight_gpu_util"`
+	Sizes         map[string]struct {
+		Runs         int      `json:"runs"`
+		NotSucceeded int      `json:"not_succeeded"`
+		MedianMS     *float64 `json:"median_ms_per_pass"`
+		MedianFPS    *float64 `json:"median_frames_per_s"`
+		MedianCV     *float64 `json:"median_cv"`
+	} `json:"sizes"`
+	Gates []struct {
+		Label   string   `json:"label"`
+		Verdict string   `json:"verdict"`
+		Ratio   *float64 `json:"ratio"`
+		Low     *float64 `json:"low"`
+		High    *float64 `json:"high"`
+		Pairs   int      `json:"pairs"`
+	} `json:"gates"`
+}
+
+// rangeOf renders a [min, max] pair, scaled, or says it was not read.
+func rangeOf(v []float64, format string, scale ...float64) string {
+	if len(v) != 2 {
+		return "not read"
+	}
+	k := 1.0
+	if len(scale) > 0 {
+		k = scale[0]
+	}
+	lo, hi := fmt.Sprintf(format, v[0]*k), fmt.Sprintf(format, v[1]*k)
+	if lo == hi {
+		return lo
+	}
+	return lo + " to " + hi
 }
 
 func plural(n int) string {
