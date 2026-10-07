@@ -20,7 +20,10 @@ import (
 	"github.com/rajeev-chaurasia/benchgrid/internal/capability"
 	"github.com/rajeev-chaurasia/benchgrid/internal/probe"
 	"github.com/rajeev-chaurasia/benchgrid/internal/spec"
+	"github.com/rajeev-chaurasia/benchgrid/internal/telemetry"
 	"github.com/rajeev-chaurasia/benchgrid/internal/wire"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Timestamp is the contract's format: UTC, nine fraction digits, always.
@@ -37,6 +40,13 @@ type session struct {
 	// the process group is reaped.
 	execDone chan struct{}
 
+	// span covers the whole session and phaseSpan the current phase. The
+	// session's context carries only the span, never the dispatch's
+	// cancellation, which belongs to an HTTP request long since answered.
+	span      trace.Span
+	phaseSpan trace.Span
+	traceCtx  context.Context
+
 	mu     sync.Mutex
 	phase  string
 	result string
@@ -46,17 +56,34 @@ type session struct {
 
 var errPreempted = errors.New("preempted:fence")
 
-func (a *Agent) newSession(d wire.Dispatch) *session {
+func (a *Agent) newSession(parent context.Context, d wire.Dispatch) *session {
+	linked := trace.ContextWithRemoteSpanContext(context.Background(), trace.SpanContextFromContext(parent))
+	traceCtx, span := telemetry.Tracer().Start(linked, "session", trace.WithAttributes(
+		attribute.String("benchgrid.rig", a.cfg.RigID),
+		attribute.String("benchgrid.experiment", d.ExperimentID),
+		attribute.Int("benchgrid.attempt", d.Attempt),
+		attribute.Int64("benchgrid.fence", d.Fence),
+	))
 	ctx, cancel := context.WithCancelCause(context.Background())
-	return &session{d: d, fence: d.Fence, ctx: ctx, cancel: cancel,
+	return &session{d: d, fence: d.Fence, ctx: ctx, cancel: cancel, span: span, traceCtx: traceCtx,
 		execDone: make(chan struct{}), phase: PhaseLeased}
 }
 
 func (s *session) preempt() { s.cancel(errPreempted) }
 
+// setPhase also ends the previous phase's span and starts the next, so the
+// trace shows where an attempt spent its time without any phase having to
+// remember to close its own span.
 func (s *session) setPhase(p string) {
 	s.mu.Lock()
 	s.phase = p
+	if s.phaseSpan != nil {
+		s.phaseSpan.End()
+		s.phaseSpan = nil
+	}
+	if p != PhaseDone && s.traceCtx != nil {
+		_, s.phaseSpan = telemetry.Tracer().Start(s.traceCtx, strings.ToLower(p))
+	}
 	s.mu.Unlock()
 }
 
@@ -110,6 +137,8 @@ func (a *Agent) run(s *session) {
 		a.log.Error("collect failed", "experiment", s.d.ExperimentID, "err", err)
 	}
 	s.setPhase(PhaseDone)
+	s.span.SetAttributes(attribute.String("benchgrid.status", out.status), attribute.String("benchgrid.reason", out.reason))
+	s.span.End()
 }
 
 func (a *Agent) execute(s *session) outcome {

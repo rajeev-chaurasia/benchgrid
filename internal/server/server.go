@@ -27,7 +27,12 @@ import (
 	"github.com/rajeev-chaurasia/benchgrid/internal/lease"
 	"github.com/rajeev-chaurasia/benchgrid/internal/sched"
 	"github.com/rajeev-chaurasia/benchgrid/internal/spec"
+	"github.com/rajeev-chaurasia/benchgrid/internal/telemetry"
 	"github.com/rajeev-chaurasia/benchgrid/internal/wire"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Server struct {
@@ -237,7 +242,10 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown status", http.StatusBadRequest)
 		return
 	}
-	err = sched.Complete(r.Context(), s.DB, r.PathValue("id"), attempt, c)
+	ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	ctx, span := telemetry.Tracer().Start(ctx, "complete", trace.WithAttributes(attribute.String("benchgrid.status", c.Status)))
+	defer span.End()
+	err = sched.Complete(ctx, s.DB, r.PathValue("id"), attempt, c)
 	switch {
 	case errors.Is(err, sched.ErrUnknownAttempt):
 		http.Error(w, err.Error(), http.StatusNotFound)

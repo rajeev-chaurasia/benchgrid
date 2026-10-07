@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/rajeev-chaurasia/benchgrid/internal/wire"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 func (a *Agent) Handler() http.Handler {
@@ -22,7 +24,8 @@ func (a *Agent) Handler() http.Handler {
 			http.Error(w, "invalid dispatch", http.StatusBadRequest)
 			return
 		}
-		reply := a.Accept(d)
+		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		reply := a.AcceptContext(ctx, d)
 		code := http.StatusAccepted
 		switch {
 		case reply.Duplicate:

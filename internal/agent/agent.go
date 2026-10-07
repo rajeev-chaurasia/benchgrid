@@ -159,6 +159,12 @@ func (a *Agent) describe(ctx context.Context) capability.Rig {
 // including waiting for preempted work to stop, so that a new session's start
 // is ordered strictly after every older session's end.
 func (a *Agent) Accept(d wire.Dispatch) wire.DispatchReply {
+	return a.AcceptContext(context.Background(), d)
+}
+
+// AcceptContext is Accept with the dispatch's trace context, so the session
+// it starts joins the scheduler's trace.
+func (a *Agent) AcceptContext(parent context.Context, d wire.Dispatch) wire.DispatchReply {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -215,7 +221,7 @@ func (a *Agent) Accept(d wire.Dispatch) wire.DispatchReply {
 		}
 	}
 
-	s := a.newSession(d)
+	s := a.newSession(parent, d)
 	a.sessions[k] = s
 	a.active[s] = true
 	go a.run(s)

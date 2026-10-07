@@ -25,7 +25,12 @@ import (
 	"github.com/rajeev-chaurasia/benchgrid/internal/capability"
 	"github.com/rajeev-chaurasia/benchgrid/internal/lease"
 	"github.com/rajeev-chaurasia/benchgrid/internal/spec"
+	"github.com/rajeev-chaurasia/benchgrid/internal/telemetry"
 	"github.com/rajeev-chaurasia/benchgrid/internal/wire"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Config struct {
@@ -159,7 +164,15 @@ func (s *Scheduler) maybeFreeze() {
 // Place claims queued experiments and leases a rig for each in one
 // transaction. The attempt counter is incremented only when a rig was granted,
 // so a pass that finds nothing free consumes nothing.
-func (s *Scheduler) Place(ctx context.Context) ([]placement, error) {
+func (s *Scheduler) Place(ctx context.Context) (placed []placement, err error) {
+	ctx, span := telemetry.Tracer().Start(ctx, "place")
+	defer func() {
+		span.SetAttributes(attribute.Int("benchgrid.placed", len(placed)))
+		if err != nil {
+			span.RecordError(err)
+		}
+		span.End()
+	}()
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -204,7 +217,6 @@ func (s *Scheduler) Place(ctx context.Context) ([]placement, error) {
 		return nil, err
 	}
 
-	var placed []placement
 	for _, q := range queue {
 		var eligible []candidate
 		for _, c := range free {
@@ -305,12 +317,20 @@ func without(cs []candidate, id string) []candidate {
 // lease and the reaper requeues the experiment when the lease lapses. Guessing
 // here would either strand a rig or run an attempt twice.
 func (s *Scheduler) dispatch(ctx context.Context, p placement) {
+	ctx, span := telemetry.Tracer().Start(ctx, "dispatch", trace.WithAttributes(
+		attribute.String("benchgrid.experiment", p.ExperimentID),
+		attribute.Int("benchgrid.attempt", p.Attempt),
+		attribute.String("benchgrid.rig", p.Rig.RigID),
+		attribute.Int64("benchgrid.fence", p.Grant.Fence),
+	))
+	defer span.End()
 	d := wire.Dispatch{
 		ExperimentID: p.ExperimentID, Attempt: p.Attempt, Fence: p.Grant.Fence,
 		LeaseAcquired: p.Grant.AcquiredAt.UTC().Format("2006-01-02T15:04:05.000000000Z"),
 		Spec:          p.Spec,
 	}
 	reply, code, err := s.send(ctx, p.Rig.Endpoint, d)
+	span.SetAttributes(attribute.Bool("benchgrid.accepted", err == nil && reply.Accepted), attribute.String("benchgrid.reason", reply.Reason))
 	switch {
 	case err != nil:
 		s.m.Dispatches.WithLabelValues("unreachable").Inc()
@@ -340,6 +360,7 @@ func (s *Scheduler) send(ctx context.Context, endpoint string, d wire.Dispatch) 
 		return reply, 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return reply, 0, err

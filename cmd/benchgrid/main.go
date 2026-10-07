@@ -19,6 +19,7 @@ import (
 	"github.com/rajeev-chaurasia/benchgrid/internal/sched"
 	"github.com/rajeev-chaurasia/benchgrid/internal/server"
 	"github.com/rajeev-chaurasia/benchgrid/internal/store"
+	"github.com/rajeev-chaurasia/benchgrid/internal/telemetry"
 )
 
 func main() {
@@ -36,6 +37,12 @@ func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})).With("instance", *id)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	shutdownTracing, err := telemetry.Setup(ctx, "benchgrid")
+	if err != nil {
+		log.Error("tracing", "err", err)
+		os.Exit(1)
+	}
+	defer shutdownTracing(context.Background())
 
 	pool, err := store.Open(ctx, *db, 20)
 	if err != nil {

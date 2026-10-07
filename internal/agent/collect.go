@@ -16,7 +16,10 @@ import (
 	"time"
 
 	"github.com/rajeev-chaurasia/benchgrid/internal/artifact"
+	"github.com/rajeev-chaurasia/benchgrid/internal/telemetry"
 	"github.com/rajeev-chaurasia/benchgrid/internal/wire"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // pending is a finished attempt the control plane has not yet acknowledged.
@@ -31,6 +34,9 @@ type pending struct {
 	StatusReason string `json:"status_reason"`
 	Dir          string `json:"dir"`
 	Uploaded     bool   `json:"uploaded"`
+	// Trace is the session's trace context, kept with the record so a
+	// completion reported after an outage still joins its attempt's trace.
+	Trace map[string]string `json:"trace,omitempty"`
 }
 
 func (a *Agent) collect(s *session, out outcome) error {
@@ -77,12 +83,17 @@ func (a *Agent) collect(s *session, out outcome) error {
 		return err
 	}
 	p := pending{ExperimentID: s.d.ExperimentID, Attempt: s.d.Attempt, Fence: s.fence,
-		Status: out.status, StatusReason: out.reason, Dir: dir}
+		Status: out.status, StatusReason: out.reason, Dir: dir, Trace: map[string]string{}}
+	otel.GetTextMapPropagator().Inject(s.traceCtx, propagation.MapCarrier(p.Trace))
 	if err := a.writePending(p); err != nil {
 		return err
 	}
 	a.flush(context.Background(), p)
 	return nil
+}
+
+func (p pending) context(ctx context.Context) context.Context {
+	return otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(p.Trace))
 }
 
 func (a *Agent) pendingPath(p pending) string {
@@ -105,6 +116,8 @@ func (a *Agent) flush(ctx context.Context, p pending) bool {
 	if len(a.cfg.ControlURLs) == 0 {
 		return false
 	}
+	ctx, span := telemetry.Tracer().Start(p.context(ctx), "report")
+	defer span.End()
 	if !p.Uploaded {
 		if err := a.upload(ctx, p); err != nil {
 			if permanent(err) {
@@ -230,6 +243,7 @@ func (a *Agent) call(ctx context.Context, method, path string, body []byte, head
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
+		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 		resp, err := a.client.Do(req)
 		if err != nil {
 			last = err

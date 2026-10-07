@@ -16,6 +16,7 @@ import (
 
 	"github.com/rajeev-chaurasia/benchgrid/internal/agent"
 	"github.com/rajeev-chaurasia/benchgrid/internal/probe"
+	"github.com/rajeev-chaurasia/benchgrid/internal/telemetry"
 )
 
 func main() {
@@ -59,6 +60,12 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	shutdownTracing, err := telemetry.Setup(ctx, "rigagent")
+	if err != nil {
+		log.Error("tracing", "err", err)
+		os.Exit(1)
+	}
+	defer shutdownTracing(context.Background())
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
