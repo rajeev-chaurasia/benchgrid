@@ -35,13 +35,24 @@ func main() {
 	check := flag.Bool("check", false, "fail if README.md is out of date instead of rewriting it")
 	readme := flag.String("readme", "README.md", "file to render into")
 	flag.Parse()
-	dir, err := latest("evidence/results")
+	dir, err := latest("evidence/results", false)
 	if err != nil {
 		die(err)
 	}
 	blocks, err := render(dir)
 	if err != nil {
 		die(err)
+	}
+	// Results from the GCP fleet live in their own directory, named with a
+	// -gcp suffix, and add their own blocks when there are any.
+	if gdir, err := latest("evidence/results", true); err == nil {
+		g, err := renderGCP(gdir)
+		if err != nil {
+			die(err)
+		}
+		for k, v := range g {
+			blocks[k] = v
+		}
 	}
 	old, err := os.ReadFile(*readme)
 	if err != nil {
@@ -68,14 +79,14 @@ func die(err error) {
 	os.Exit(1)
 }
 
-func latest(root string) (string, error) {
+func latest(root string, gcp bool) (string, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return "", err
 	}
 	var dirs []string
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() && strings.HasSuffix(e.Name(), "-gcp") == gcp {
 			dirs = append(dirs, e.Name())
 		}
 	}
@@ -278,4 +289,151 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+type gateSummary struct {
+	Comparisons         int                       `json:"comparisons"`
+	NullComparisons     int                       `json:"null_comparisons"`
+	FalseAlarms         int                       `json:"false_alarms"`
+	InjectedComparisons int                       `json:"injected_comparisons"`
+	InjectedCaught      int                       `json:"injected_caught"`
+	BySize              map[string]map[string]int `json:"by_size"`
+	Runs                int                       `json:"runs"`
+	Reruns              int                       `json:"reruns_for_noise"`
+	PairsOnOneRig       int                       `json:"pairs_on_one_rig"`
+	Pairs               int                       `json:"pairs"`
+}
+
+type isoCell struct {
+	Runs         int      `json:"runs"`
+	NotSucceeded int      `json:"not_succeeded"`
+	Profiles     int      `json:"profiles"`
+	MedianCV     *float64 `json:"median_cv"`
+}
+
+type isoSummary struct {
+	Metric string             `json:"metric"`
+	Cells  map[string]isoCell `json:"cells"`
+}
+
+type scaleSummary struct {
+	Jobs          int            `json:"jobs"`
+	States        map[string]int `json:"states"`
+	SuccessRate   *float64       `json:"success_rate"`
+	WallSeconds   *float64       `json:"wall_seconds"`
+	JobsPerMinute *float64       `json:"jobs_per_minute"`
+	QueueWait     struct {
+		P50 *float64 `json:"p50"`
+		P95 *float64 `json:"p95"`
+		Max *float64 `json:"max"`
+	} `json:"queue_wait_seconds"`
+}
+
+type gcpEnv struct {
+	GitCommit    string   `json:"git_commit"`
+	Zone         string   `json:"zone"`
+	RigMachine   string   `json:"rig_machine"`
+	CPUModel     string   `json:"cpu_model"`
+	Kernel       string   `json:"kernel"`
+	TunedRigs    int      `json:"tuned_rigs"`
+	DefaultRigs  int      `json:"default_rigs"`
+	GPU          string   `json:"gpu"`
+	ControlPlane string   `json:"control_plane"`
+	Notes        []string `json:"notes"`
+}
+
+func secs(v *float64) string {
+	if v == nil {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.1f s", *v)
+}
+
+// renderGCP renders whichever GCP studies the directory holds. A study that
+// has not been run yet has no file and no block, and the README carries no
+// block for it either, which splice enforces.
+func renderGCP(dir string) (map[string]string, error) {
+	b := map[string]string{}
+	var e gcpEnv
+	if err := evidence.ReadJSON(filepath.Join(dir, "env.json"), &e); err != nil {
+		return nil, err
+	}
+	b["gcp_source"] = fmt.Sprintf("From `%s/`, at commit `%s`: %d tuned and %d default `%s` bench nodes\n"+
+		"(%s, kernel %s) in %s, with the control plane on %s.\n",
+		filepath.ToSlash(dir), e.GitCommit[:7], e.TunedRigs, e.DefaultRigs, e.RigMachine, e.CPUModel, e.Kernel, e.Zone, e.ControlPlane)
+
+	var g gateSummary
+	if err := evidence.ReadJSON(filepath.Join(dir, "gate", "summary.json"), &g); err == nil {
+		var t strings.Builder
+		fmt.Fprintf(&t, "%d comparisons over the 30 avbench profiles on tuned nodes: %d null, where\n"+
+			"baseline and candidate are the same binary, and %d with an injected slowdown.\n"+
+			"%d runs, %d of them reruns of a run noisier than 5%%; %d of %d pairs ran on\n"+
+			"one rig.\n\n", g.Comparisons, g.NullComparisons, g.InjectedComparisons, g.Runs, g.Reruns, g.PairsOnOneRig, g.Pairs)
+		t.WriteString("| comparison | runs | REGRESSION | PASS | INCONCLUSIVE | other |\n| --- | ---: | ---: | ---: | ---: | ---: |\n")
+		keys := make([]string, 0, len(g.BySize))
+		for k := range g.BySize {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			if keys[i] == "null" || keys[j] == "null" {
+				return keys[i] == "null"
+			}
+			var a, c float64
+			fmt.Sscanf(keys[i], "%f", &a)
+			fmt.Sscanf(keys[j], "%f", &c)
+			return a < c
+		})
+		for _, k := range keys {
+			v := g.BySize[k]
+			total := 0
+			for _, n := range v {
+				total += n
+			}
+			other := total - v["REGRESSION"] - v["PASS"] - v["INCONCLUSIVE"]
+			label := "injected " + k
+			if k == "null" {
+				label = "null (no change)"
+			}
+			fmt.Fprintf(&t, "| %s | %d | %d | %d | %d | %d |\n", label, total, v["REGRESSION"], v["PASS"], v["INCONCLUSIVE"], other)
+		}
+		fmt.Fprintf(&t, "\nOn the null comparisons, %d of %d were called a regression: a false alarm rate\nof %.1f%%. Of the injected ones, %d of %d were caught.\n",
+			g.FalseAlarms, g.NullComparisons, 100*float64(g.FalseAlarms)/float64(max(1, g.NullComparisons)), g.InjectedCaught, g.InjectedComparisons)
+		b["gcp_gate"] = t.String()
+	}
+
+	var iso isoSummary
+	if err := evidence.ReadJSON(filepath.Join(dir, "isolation", "summary.json"), &iso); err == nil {
+		var t strings.Builder
+		t.WriteString("| nodes | noise on the system core | runs | not succeeded | median of per-profile median CV |\n| --- | --- | ---: | ---: | ---: |\n")
+		for _, cls := range []string{"n2d-isolated", "n2d-default"} {
+			for _, cond := range []string{"quiet", "noise"} {
+				c := iso.Cells[cls+"/"+cond]
+				label := map[string]string{"n2d-isolated": "tuned", "n2d-default": "default"}[cls]
+				fmt.Fprintf(&t, "| %s | %s | %d | %d | %s |\n", label, map[string]string{"quiet": "off", "noise": "on"}[cond], c.Runs, c.NotSucceeded, pct(c.MedianCV))
+			}
+		}
+		b["gcp_isolation"] = t.String()
+	}
+
+	var sc scaleSummary
+	if err := evidence.ReadJSON(filepath.Join(dir, "scale", "summary.json"), &sc); err == nil {
+		var t strings.Builder
+		states := make([]string, 0, len(sc.States))
+		for k, v := range sc.States {
+			states = append(states, fmt.Sprintf("%s %s", comma(v), k))
+		}
+		sort.Strings(states)
+		rate := "n/a"
+		if sc.SuccessRate != nil {
+			rate = fmt.Sprintf("%.2f%%", *sc.SuccessRate*100)
+		}
+		perMin := "n/a"
+		if sc.JobsPerMinute != nil {
+			perMin = fmt.Sprintf("%.0f", *sc.JobsPerMinute)
+		}
+		fmt.Fprintf(&t, "| | |\n| --- | ---: |\n| jobs | %s |\n| outcomes | %s |\n| succeeded | %s |\n| throughput | %s jobs/minute |\n| queue wait, median and p95 | %s and %s |\n| wall clock | %s |\n",
+			comma(sc.Jobs), strings.Join(states, ", "), rate, perMin, secs(sc.QueueWait.P50), secs(sc.QueueWait.P95), secs(sc.WallSeconds))
+		b["gcp_scale"] = t.String()
+	}
+	return b, nil
 }

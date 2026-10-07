@@ -303,6 +303,35 @@ def validate_gate(d: Path) -> list[str]:
     return bad
 
 
+def env(a: argparse.Namespace) -> int:
+    """Records the fleet as it describes itself: what the rigs report through
+    the API, and what GCP reports about the cluster. Nothing is typed in."""
+    client = Client(a.api)
+    rigs = json.loads(client._call("GET", "/v1/rigs"))
+    bench = [r["descriptor"] for r in rigs if r["descriptor"]["hardware_class"].startswith("n2d")]
+    gpus = [r["descriptor"] for r in rigs if r["descriptor"].get("gpu_vendor")]
+    gke = subprocess.run(["gcloud", "container", "clusters", "describe", a.cluster, "--zone", a.zone,
+                          "--project", a.project, "--format", "value(currentMasterVersion)"],
+                         capture_output=True, text=True).stdout.strip()
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    rec = {
+        "git_commit": commit,
+        "zone": a.zone,
+        "rig_machine": "n2d-standard-4, one thread per core",
+        "cpu_model": bench[0]["cpu_model"] if bench else "",
+        "kernel": bench[0]["kernel"] if bench else "",
+        "tuned_rigs": sum(1 for d in bench if d["hardware_class"].endswith("isolated")),
+        "default_rigs": sum(1 for d in bench if d["hardware_class"].endswith("default")),
+        "gpu": f"{gpus[0]['gpu_model']} driver {gpus[0]['driver_version']}" if gpus else "",
+        "control_plane": f"GKE {gke}, two replicas, Postgres 16 in cluster",
+        "notes": a.note or [],
+    }
+    Path(a.out).mkdir(parents=True, exist_ok=True)
+    (Path(a.out) / "env.json").write_text(json.dumps(rec, indent=2) + "\n")
+    print(json.dumps(rec, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="benchgrid-study", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -322,8 +351,15 @@ def main(argv: list[str] | None = None) -> int:
         s.add_argument("--jobs", type=int, default=12000, help="scale: how many jobs")
     v = sub.add_parser("validate")
     v.add_argument("dir")
+    e = sub.add_parser("env")
+    e.add_argument("--api", required=True)
+    e.add_argument("--project", required=True)
+    e.add_argument("--zone", default="us-west1-b")
+    e.add_argument("--cluster", default="benchgrid")
+    e.add_argument("--note", action="append")
+    e.add_argument("--out", required=True)
     a = p.parse_args(argv)
-    return {"isolation": isolation, "scale": scale, "validate": validate}[a.cmd](a)
+    return {"isolation": isolation, "scale": scale, "validate": validate, "env": env}[a.cmd](a)
 
 
 if __name__ == "__main__":

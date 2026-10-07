@@ -77,6 +77,13 @@ jobs:
       - name: The gate's statistics, its control flow, and the exporter's verification
         working-directory: python
         run: uv run --locked pytest -q
+      - name: Recompute every GCP study's numbers from its published runs
+        working-directory: python
+        run: |
+          for d in ../evidence/results/*-gcp; do
+            [ -d "$d" ] || continue
+            uv run --locked benchgrid-study validate "$d"
+          done
 
   workloads:
     runs-on: ubuntu-latest
