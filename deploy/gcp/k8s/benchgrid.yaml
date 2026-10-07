@@ -45,6 +45,8 @@ metadata:
   labels: {app.kubernetes.io/name: benchgrid}
   annotations:
     networking.gke.io/load-balancer-type: Internal
+    # A GPU node may have to live in another region when the first has none.
+    networking.gke.io/internal-load-balancer-allow-global-access: "true"
 spec:
   type: LoadBalancer
   selector: {app.kubernetes.io/name: benchgrid}

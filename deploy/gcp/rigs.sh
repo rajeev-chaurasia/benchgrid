@@ -37,10 +37,14 @@ gpu)
     l4) machine=(--machine-type g2-standard-4) class=gcp-l4 ;;
     *) echo "GPU must be t4 or l4" >&2; exit 2 ;;
   esac
-  gc compute instances create benchgrid-rig-gpu-0 --zone "${GPU_ZONE:-$ZONE}" \
+  gz=${GPU_ZONE:-$ZONE}
+  gregion=${gz%-*}
+  gsubnet=$SUBNET
+  [ "$gregion" != "$REGION" ] && gsubnet=benchgrid-$gregion
+  gc compute instances create benchgrid-rig-gpu-0 --zone "$gz" \
     "${machine[@]}" \
     --maintenance-policy TERMINATE \
-    --subnet "$SUBNET" --no-address \
+    --subnet "$gsubnet" --no-address \
     --image-family pytorch-2-9-cu129-ubuntu-2204-nvidia-580 --image-project deeplearning-platform-release \
     --boot-disk-size 100GB --boot-disk-type pd-balanced \
     --service-account "$RIG_SA" --scopes cloud-platform \

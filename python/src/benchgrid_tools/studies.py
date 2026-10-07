@@ -246,6 +246,117 @@ def summarize_scale(records: list[dict]) -> dict:
     }
 
 
+# ---- gpu --------------------------------------------------------------------------
+
+GPU_SIZES = {"small": ["--batch", "4", "--size", "192"], "medium": ["--batch", "8", "--size", "256"], "large": ["--batch", "16", "--size", "320"]}
+
+
+def gpu_spec(revision: str, args: list[str], reps: int) -> dict:
+    """The gates are the hardware's own readings: the run waits for GPU
+    utilization under 10% and temperature under 85 C, both from nvidia-smi,
+    and needs a real NVIDIA GPU with a recent driver and enough memory."""
+    return {
+        "benchmark": "gpubench_perception",
+        "revision": revision,
+        "command": ["/usr/bin/python3", "{binary}", "--iters", "20"] + args,
+        "warmups": 1,
+        "repetitions": reps,
+        "timeout_seconds": 1800,
+        "requirements": {"os": "linux", "gpu_vendor": "nvidia", "driver": ">=550", "min_gpu_memory_bytes": 16 << 30},
+        "environment": {"max_gpu_util": 0.10, "max_temp_c": 85, "max_clock_offset_ms": 5.0, "preflight_timeout_seconds": 120},
+        "metrics": [
+            {"name": "gpu_time_ns", "unit": "ns", "direction": "lower_is_better"},
+            {"name": "frames_per_s", "unit": "ops_per_s", "direction": "higher_is_better"},
+        ],
+        "artifacts": {"binary_sha256": "0" * 64},
+    }
+
+
+def gpu(a: argparse.Namespace) -> int:
+    from dataclasses import asdict
+
+    from .gate import Config, compare
+
+    client = Client(a.api)
+    out = Path(a.out)
+    (out / "store").mkdir(parents=True, exist_ok=True)
+    sha = client.upload_blob(Path(a.binary).read_bytes())
+    records = []
+    with (out / "runs.jsonl").open("w") as f:
+        for k in range(a.runs):
+            for size, args in GPU_SIZES.items():
+                spec = gpu_spec(a.revision, args, a.reps)
+                spec["artifacts"]["binary_sha256"] = sha
+                rec = fetch_run(client, client.submit(spec, f"gpu-{a.tag}-{size}-{k}", max_attempts=2), out / "store")
+                rec["size"] = size
+                records.append(rec)
+                f.write(json.dumps(rec) + "\n")
+                f.flush()
+    # Two gate decisions on the GPU: the same model against itself, and the
+    # model against one with an extra residual block per stage, a real change
+    # to the work rather than injected spinning.
+    cfg = Config(metric="gpu_time_ns", min_pairs=3, max_pairs=5, max_cv=0.05)
+    base = gpu_spec(a.revision, GPU_SIZES["medium"], a.reps)
+    base["artifacts"]["binary_sha256"] = sha
+    deeper = json.loads(json.dumps(base))
+    deeper["command"] += ["--depth", "3"]
+    gates = []
+    with (out / "comparisons.jsonl").open("w") as f:
+        for label, cand in (("null", base), ("depth 2 to 3", deeper)):
+            r = asdict(compare(client, base, cand, cfg))
+            for run in r["runs"]:
+                fetch_run(client, run["experiment"], out / "store")
+            r["label"] = label
+            gates.append(r)
+            f.write(json.dumps(r) + "\n")
+    summary = summarize_gpu(records, gates, out / "store")
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def summarize_gpu(records: list[dict], gates: list[dict], store: Path) -> dict:
+    sizes = {}
+    rig = None
+    temps, utils = [], []
+    for size in GPU_SIZES:
+        cvs, medians, fps, failed = [], [], [], 0
+        for r in records:
+            if r["size"] != size:
+                continue
+            if r["state"] != "SUCCEEDED":
+                failed += 1
+                continue
+            d = store / "runs" / r["experiment"] / f"attempt-{r['attempt']}"
+            cv, med = run_cv(d, "gpu_time_ns")
+            _, fmed = run_cv(d, "frames_per_s")
+            run = json.loads((d / "run.json").read_text())
+            rig = rig or run["rig"]
+            pre = run["environment"]["preflight_before"]
+            if pre.get("temp_c") is not None:
+                temps.append(pre["temp_c"])
+            if pre.get("gpu_util") is not None:
+                utils.append(pre["gpu_util"])
+            cvs.append(cv)
+            medians.append(med / 1e6 / 20)  # per forward pass, in ms
+            fps.append(fmed)
+        sizes[size] = {
+            "runs": len(cvs) + failed, "not_succeeded": failed,
+            "median_ms_per_pass": float(np.median(medians)) if medians else None,
+            "median_frames_per_s": float(np.median(fps)) if fps else None,
+            "median_cv": float(np.median(cvs)) if cvs else None,
+        }
+    return {
+        "gpu": f"{rig['gpu_model']}, {rig['gpu_memory_bytes'] >> 20} MiB, driver {rig['driver_version']}" if rig else None,
+        "emulated": rig["emulated"] if rig else None,
+        "sizes": sizes,
+        "preflight_temp_c": [min(temps), max(temps)] if temps else None,
+        "preflight_gpu_util": [min(utils), max(utils)] if utils else None,
+        "gates": [{"label": g["label"], "verdict": g["verdict"], "ratio": g["ratio"], "low": g["low"],
+                   "high": g["high"], "pairs": g["pairs"]} for g in gates],
+    }
+
+
 # ---- validation -------------------------------------------------------------------
 
 
@@ -267,6 +378,12 @@ def validate(a: argparse.Namespace) -> int:
             bad.append("scale summary does not match its jobs")
     if (root / "gate" / "summary.json").exists():
         bad += validate_gate(root / "gate")
+    if (root / "gpu" / "summary.json").exists():
+        d = root / "gpu"
+        recs = [json.loads(l) for l in (d / "runs.jsonl").read_text().splitlines() if l]
+        gates = [json.loads(l) for l in (d / "comparisons.jsonl").read_text().splitlines() if l]
+        if summarize_gpu(recs, gates, d / "store") != json.loads((d / "summary.json").read_text()):
+            bad.append("gpu summary does not match its runs")
     for b in bad:
         print("FAIL", b)
     print("ok" if not bad else f"{len(bad)} failures")
@@ -335,7 +452,7 @@ def env(a: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="benchgrid-study", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("isolation", "scale"):
+    for name in ("isolation", "scale", "gpu"):
         s = sub.add_parser(name)
         s.add_argument("--api", required=True)
         s.add_argument("--project", required=True)
@@ -359,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--note", action="append")
     e.add_argument("--out", required=True)
     a = p.parse_args(argv)
-    return {"isolation": isolation, "scale": scale, "validate": validate, "env": env}[a.cmd](a)
+    return {"isolation": isolation, "scale": scale, "gpu": gpu, "validate": validate, "env": env}[a.cmd](a)
 
 
 if __name__ == "__main__":
