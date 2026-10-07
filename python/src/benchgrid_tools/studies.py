@@ -61,7 +61,7 @@ def avbench_spec(profile: str, revision: str, cls: str, warmups: int, reps: int,
 def rig_instances(project: str) -> list[tuple[str, str]]:
     out = subprocess.run(
         ["gcloud", "compute", "instances", "list", "--project", project,
-         "--filter", "labels.app=benchgrid AND labels.role=rig AND status=RUNNING",
+         "--filter", "labels.app=benchgrid AND labels.role=rig AND (labels.tuning=tuned OR labels.tuning=default) AND status=RUNNING",
          "--format", "value(name,zone.basename())"],
         capture_output=True, text=True, check=True,
     ).stdout
@@ -119,6 +119,9 @@ def run_cv(run_dir: Path, metric: str) -> tuple[float | None, float | None]:
 
 
 def isolation(a: argparse.Namespace) -> int:
+    """Rerunning with the same --tag resumes: every run's idempotency key is
+    derived from the tag, so runs already made are returned by the control
+    plane rather than made again."""
     client = Client(a.api)
     out = Path(a.out)
     (out / "store").mkdir(parents=True, exist_ok=True)
