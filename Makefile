@@ -1,6 +1,6 @@
 GO ?= go
 
-.PHONY: build test race vet prose check evidence validate
+.PHONY: build test race vet prose check evidence validate readme
 
 build:
 	$(GO) build -o bin/ ./cmd/...
@@ -23,4 +23,8 @@ evidence: build
 	$(GO) run ./cmd/evidence -out evidence/results
 
 validate:
-	$(GO) run ./script/validate_evidence.go evidence/results
+	$(GO) run ./script/validate_evidence evidence/results
+	$(GO) run ./script/readme_numbers -check
+
+readme:
+	$(GO) run ./script/readme_numbers

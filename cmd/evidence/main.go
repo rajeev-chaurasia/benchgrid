@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rajeev-chaurasia/benchgrid/internal/evidence"
+	"github.com/rajeev-chaurasia/benchgrid/internal/probe"
 )
 
 type harness struct {
@@ -85,18 +86,22 @@ func main() {
 // Environment is what a reader needs to judge whether the numbers transfer to
 // their machine. Every field is read from the system, not typed in.
 type Environment struct {
-	GitCommit   string `json:"git_commit"`
-	GitDirty    bool   `json:"git_dirty"`
-	GoVersion   string `json:"go_version"`
-	OS          string `json:"os"`
-	Arch        string `json:"arch"`
-	CPU         string `json:"cpu"`
-	CPUCores    int    `json:"cpu_cores"`
-	MemBytes    string `json:"mem_bytes"`
-	Kernel      string `json:"kernel"`
-	Postgres    string `json:"postgres"`
-	StartedUTC  string `json:"started_utc"`
-	Description string `json:"description"`
+	GitCommit  string `json:"git_commit"`
+	GitDirty   bool   `json:"git_dirty"`
+	GoVersion  string `json:"go_version"`
+	OS         string `json:"os"`
+	Arch       string `json:"arch"`
+	CPU        string `json:"cpu"`
+	CPUCores   int    `json:"cpu_cores"`
+	MemBytes   string `json:"mem_bytes"`
+	Kernel     string `json:"kernel"`
+	Postgres   string `json:"postgres"`
+	StartedUTC string `json:"started_utc"`
+	// IdleCPUBusy is the fraction of the host's CPU busy over five seconds
+	// before any run starts. Every rig shares this host, so this load is
+	// present under every condition, including the ones called quiet.
+	IdleCPUBusy float64 `json:"idle_cpu_busy_fraction"`
+	Description string  `json:"description"`
 }
 
 func (h *harness) environment() Environment {
@@ -116,6 +121,13 @@ func (h *harness) environment() Environment {
 		StartedUTC: time.Now().UTC().Format(time.RFC3339),
 		Description: "Every rig is a process on this one host. No physical rig and no GPU took " +
 			"part. Rigs are distinguished by agent, not by hardware.",
+	}
+	if b0, ok := probe.BusyCPUSeconds(context.Background()); ok {
+		start := time.Now()
+		time.Sleep(5 * time.Second)
+		if b1, ok := probe.BusyCPUSeconds(context.Background()); ok {
+			e.IdleCPUBusy = (b1 - b0) / (time.Since(start).Seconds() * float64(runtime.NumCPU()))
+		}
 	}
 	if runtime.GOOS == "darwin" {
 		e.CPU = run("sysctl", "-n", "machdep.cpu.brand_string")

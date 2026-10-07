@@ -63,6 +63,8 @@ jobs:
           go-version-file: go.mod
       - name: Recompute every published number and check the manifests
         run: go run ./script/validate_evidence evidence/results
+      - name: Fail if the README quotes a number the evidence does not say
+        run: go run ./script/readme_numbers -check
       - name: Check the manifests with a tool this repository did not write
         run: |
           for d in evidence/results/*/; do (cd "$d" && sha256sum -c --quiet SHA256SUMS); done

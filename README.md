@@ -13,76 +13,57 @@ It is built so its central claim can be checked rather than taken on trust:
 > executes work for two lease holders at overlapping times, and the same
 > harness produces overlapping execution when the fencing check is removed.
 
-Every rig here is a process on one Apple M4 laptop. No physical rig and no GPU
-took part in anything below. Rigs that advertise hardware they do not have are
+Every rig here is a process, or a Linux container, on one Apple M4 laptop. No
+physical rig and no GPU took part in anything below. Rigs that advertise hardware they do not have are
 marked `emulated` in every result they produce, and a spec must opt in before
 it can be placed on one.
 
 ## The measured result
 
-From `evidence/results/20261007T002030Z/`, at commit `9c2b23c`, on Postgres
-14.18. Every number is recomputed from the raw files beside it by
-`go run ./script/validate_evidence`, which CI runs on every push and which
-fails if either negative control ever stops failing.
+<!-- evidence:source -->
+<!-- /evidence:source -->
+Every number below is rendered from those files by
+`go run ./script/readme_numbers`, and recomputed from the raw data by
+`go run ./script/validate_evidence`. CI runs both on every push: the first
+fails if this README quotes a number the evidence does not say, the second if
+any summary disagrees with its raw data or either negative control ever stops
+failing.
 
-**The lease.** Sixty-four workers, twenty rigs, fifty thousand acquisition
-attempts per mode, TTLs of 5 to 20 ms, one grant in ten left to expire.
+**The lease.**
+<!-- evidence:lease -->
+<!-- /evidence:lease -->
 
-| acquire | grants | double bookings | peak attempts in flight |
-| --- | ---: | ---: | ---: |
-| one conditional `UPDATE` (the product) | 2,436 | **0** | 62 |
-| read, then unconditional write (control) | 5,641 | 40,445 | 64 |
+**The fence.** Three control plane replicas. Replicas freeze themselves with
+`SIGSTOP` between leasing a rig and dispatching to it, and are resumed after
+the lease has lapsed and the rig has been leased again by someone else. The
+run is done twice: with every agent a process on the host, and with every
+agent a Linux container in Docker's Linux VM on the same laptop.
 
-**The fence.** Three control plane replicas, eight rigs, three hundred
-experiments per mode. Replicas freeze themselves with `SIGSTOP` between
-leasing a rig and dispatching to it, and are resumed after the lease has
-lapsed and the rig has been leased again by someone else.
-
-| agent | freezes | stale dispatches that reached a rig | refused | overlapping process pairs | overlapping session pairs |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| checks the fence | 34 | 32 | 32 | **0** | **0** |
-| does not (control) | 40 | 35 | 0 | 83 | 46 |
+<!-- evidence:fence -->
+<!-- /evidence:fence -->
 
 The last two columns are the point. The same harness, the same freezes,
 against an agent that trusts whatever it is sent, runs two holders' work on one
 rig at once. Overlap is computed from every benchmark process and every
-session each agent recorded, on the host's monotonic clock.
+session each agent recorded, on the host's monotonic clock, including the
+lifetime of any benchmark an agent's death left running.
 
-**Chaos.** Three replicas, eight rigs in four emulated hardware classes, six
-hundred experiments, forty-eight of them built to fail. During the run: 49
-agents killed and restarted, 14 replicas killed and restarted, 23 replicas
-frozen, 7 outages of the whole control plane at once, and one artifact write
-in five refused.
-
-| | |
-| --- | ---: |
-| experiments ending as they should (sound ones succeed, broken ones fail) | 600 of 600 |
-| final attempts with a sealed artifact that verifies and agrees with the control plane | 600 of 600 |
-| runs placed on a rig their spec did not allow | 0 |
-| overlapping process pairs | 0 |
-| rigs still leased afterwards | 0 |
-| experiments needing a second or third attempt | 36 and 4 |
+**Chaos.**
+<!-- evidence:chaos -->
+<!-- /evidence:chaos -->
 
 ## A second, weaker claim
 
-> With bursty load injected on its host, the measurement gate declined to
-> publish 11 of 12 runs that an ungated agent published with a median
-> coefficient of variation of 23%, against 4.7% with no injected load.
+<!-- evidence:noise_claim -->
+<!-- /evidence:noise_claim -->
 
-It is weaker on purpose, and here is how. One loaded run got through, with a
-CV of 8.4%. The gate also declined 4 of 12 runs with no injected load, because
-this laptop's own background load, about a fifth of its CPU when idle,
-crossed the limit during them. On this machine the gate is coarse and
-conservative, and its numbers are about this machine. The first two designs
-of the gate failed outright, one by making the noise worse, and
-[PLAN.md](PLAN.md) records both.
+It is weaker on purpose, and here is how.
+<!-- evidence:noise -->
+<!-- /evidence:noise -->
 
-| condition | published | declined | median CV of published | median latency |
-| --- | ---: | ---: | ---: | ---: |
-| no load | 12 | 0 | 4.7% | 37.7 ms |
-| no load, gated | 8 | 4 | 1.3% | 37.4 ms |
-| bursty load | 12 | 0 | 23.4% | 46.2 ms |
-| bursty load, gated | 1 | 11 | 8.4% | 44.7 ms |
+On this machine the gate is coarse and conservative, and its numbers are
+about this machine. The first two designs of the gate failed outright, one by
+making the noise worse, and [PLAN.md](PLAN.md) records both.
 
 ## How the guarantee works
 
@@ -150,8 +131,9 @@ make build
 could not find out, so a pipeline can tell a broken benchmark from a broken
 pipeline.
 
-Reproduce the evidence with `make evidence` (about eleven minutes here, needs a
-local Postgres) and check it with `make validate`. Method and limits:
+Reproduce the evidence with `make evidence`, which takes a while and needs a
+local Postgres and Docker. Check it with `make validate`, and render this
+README's numbers from it with `make readme`. Method and limits:
 [docs/evidence.md](docs/evidence.md), [docs/known-misses.md](docs/known-misses.md),
 [docs/non-goals.md](docs/non-goals.md).
 
