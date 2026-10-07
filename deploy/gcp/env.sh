@@ -15,6 +15,10 @@ LABELS=app=benchgrid
 # these scripts do can change which cluster kubectl talks to elsewhere.
 KUBECONFIG=${KUBECONFIG_BENCHGRID:-${TMPDIR:-/tmp}/benchgrid-kubeconfig}
 export KUBECONFIG
+# kubectl authenticates to GKE through gcloud's gke-gcloud-auth-plugin, which
+# gcloud installs beside itself rather than on PATH.
+PATH="$(dirname "$(readlink -f "$(command -v gcloud)")"):$PATH"
+export PATH
 BUILD_SA=benchgrid-build@$PROJECT.iam.gserviceaccount.com
 RIG_SA=benchgrid-rig@$PROJECT.iam.gserviceaccount.com
 NODE_SA=benchgrid-node@$PROJECT.iam.gserviceaccount.com
