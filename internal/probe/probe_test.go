@@ -124,3 +124,10 @@ func TestParseCPUList(t *testing.T) {
 		t.Error("bad lists must read as none")
 	}
 }
+
+func TestClassLabelsWithoutEmulating(t *testing.T) {
+	r := (&Prober{Class: "n2-isolated"}).Describe(context.Background(), "rig-z")
+	if r.HardwareClass != "n2-isolated" || r.Emulated {
+		t.Errorf("%+v", r)
+	}
+}

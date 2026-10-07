@@ -34,6 +34,7 @@ func main() {
 	listen := flag.String("listen", ":9090", "address the control plane dispatches to")
 	endpoint := flag.String("endpoint", "", "URL the control plane should use to reach this agent")
 	profilePath := flag.String("profile", "", "emulation profile; any profile marks the rig emulated")
+	class := flag.String("hardware-class", "", "hardware class label for this rig; unlike -profile, does not mark it emulated")
 	intervalLog := flag.String("interval-log", "", "append every process and session interval here")
 	heartbeat := flag.Duration("heartbeat", time.Second, "heartbeat interval")
 	timeout := flag.Duration("request-timeout", 2*time.Second, "per request timeout to the control plane; keep well inside the lease TTL")
@@ -47,7 +48,7 @@ func main() {
 		log.Error("-id, -state-dir and -endpoint are required")
 		os.Exit(2)
 	}
-	prober := &probe.Prober{}
+	prober := &probe.Prober{Class: *class}
 	if *profilePath != "" {
 		p, err := probe.LoadProfile(*profilePath)
 		if err != nil {

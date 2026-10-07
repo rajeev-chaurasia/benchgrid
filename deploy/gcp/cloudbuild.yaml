@@ -1,0 +1,24 @@
+# Builds everything that runs on GCP from this commit, on Linux/amd64, so the
+# binaries the evidence measures are built the same way every time and none
+# of them is built on a laptop of a different architecture.
+#   gcloud builds submit --config deploy/gcp/cloudbuild.yaml --substitutions _BUCKET=...,_REPO_IMAGE=...,_TAG=...
+steps:
+  - id: go
+    name: golang:1.26
+    env: ["CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64"]
+    args: ["go", "build", "-trimpath", "-o", "/workspace/out/", "./cmd/benchgrid", "./cmd/bgctl", "./cmd/rigagent", "./cmd/benchload"]
+  - id: avbench
+    name: gcc:14
+    # The same flags the CMake release build uses, plus -static so the
+    # benchmark carries its own libstdc++ and cannot change when a rig's does.
+    args: ["g++", "-O3", "-DNDEBUG", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-ffp-contract=off", "-static",
+           "workloads/avbench/avbench.cpp", "-o", "/workspace/out/avbench"]
+  - id: image
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "deploy/gcp/Dockerfile", "-t", "${_REPO_IMAGE}:${_TAG}", "."]
+  - id: upload
+    name: gcr.io/cloud-builders/gcloud
+    args: ["storage", "cp", "/workspace/out/rigagent", "/workspace/out/avbench", "/workspace/out/benchload", "/workspace/out/bgctl", "gs://${_BUCKET}/bin/${_TAG}/"]
+images: ["${_REPO_IMAGE}:${_TAG}"]
+options:
+  machineType: E2_HIGHCPU_8

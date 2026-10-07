@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# rigs.sh create COUNT tuned|default [FIRST_INDEX]
+# rigs.sh gpu
+# Bench nodes are n2-standard-4 with one thread per core, which is two
+# physical cores: CPU 0 for the system and the agent, CPU 1 for benchmarks.
+# With SMT on, an "isolated" vCPU would share a core with everything else.
+set -euo pipefail
+cd "$(dirname "$0")"
+source env.sh
+
+control_url() { kubectl get svc benchgrid -o jsonpath='http://{.status.loadBalancer.ingress[0].ip}:8080'; }
+agent_url() { cat .agent-url 2>/dev/null || { echo "run ./images.sh first" >&2; exit 1; }; }
+
+case "${1:-}" in
+create)
+  count=$2 mode=$3 first=${4:-0}
+  tuned=false class=n2-default
+  [ "$mode" = tuned ] && tuned=true class=n2-isolated
+  names=()
+  for i in $(seq "$first" $((first + count - 1))); do names+=("benchgrid-rig-$mode-$i"); done
+  gc compute instances create "${names[@]}" --zone "$ZONE" \
+    --machine-type n2-standard-4 --threads-per-core 1 \
+    --subnet "$SUBNET" --no-address \
+    --image-family debian-12 --image-project debian-cloud --boot-disk-size 20GB --boot-disk-type pd-balanced \
+    --scopes storage-ro,logging-write,monitoring-write \
+    --labels "$LABELS,role=rig,tuning=$mode" \
+    --metadata "benchgrid-tuned=$tuned,benchgrid-bench-cpus=1,benchgrid-class=$class,benchgrid-control=$(control_url),benchgrid-agent=$(agent_url)" \
+    --metadata-from-file startup-script=rig-startup.sh
+  ;;
+gpu)
+  gc compute instances create benchgrid-rig-gpu-0 --zone "$ZONE" \
+    --machine-type n1-standard-4 --accelerator type=nvidia-tesla-t4,count=1 \
+    --maintenance-policy TERMINATE \
+    --subnet "$SUBNET" --no-address \
+    --image-family pytorch-2-9-cu129-ubuntu-2204-nvidia-580 --image-project deeplearning-platform-release \
+    --boot-disk-size 80GB --boot-disk-type pd-balanced \
+    --scopes storage-ro,logging-write,monitoring-write \
+    --labels "$LABELS,role=rig,tuning=gpu" \
+    --metadata "install-nvidia-driver=True,benchgrid-tuned=false,benchgrid-class=gcp-t4,benchgrid-control=$(control_url),benchgrid-agent=$(agent_url)" \
+    --metadata-from-file startup-script=rig-startup.sh
+  ;;
+*)
+  echo "usage: rigs.sh create COUNT tuned|default [FIRST] | rigs.sh gpu" >&2
+  exit 2
+  ;;
+esac

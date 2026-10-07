@@ -72,6 +72,10 @@ type Prober struct {
 	// CPUWindow is how long cpu_util is sampled over. Shorter is noisier.
 	CPUWindow time.Duration
 	CPUFreq   CPUFreq
+	// Class names the rig's hardware class without claiming any hardware, so
+	// unlike a profile it does not mark the rig emulated. It is how real rigs
+	// of one machine type are grouped, for example by how they were tuned.
+	Class string
 }
 
 func (p *Prober) Describe(ctx context.Context, rigID string) capability.Rig {
@@ -103,6 +107,9 @@ func (p *Prober) Describe(ctx context.Context, rigID string) capability.Rig {
 		r.GPUMemoryBytes, r.GPUCount = g.MemoryTotalBytes, g.Count
 	}
 	r.Governors = p.CPUFreq.Available()
+	if p.Class != "" {
+		r.HardwareClass = p.Class
+	}
 
 	if pr := p.Profile; pr != nil {
 		r.Emulated = true
