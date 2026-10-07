@@ -1,5 +1,37 @@
 # benchgrid, implementation plan
 
+## 0. Revisions
+
+Corrected against what the build and its evidence runs established, rather
+than left as first written. The substantive changes:
+
+- **The fence was the attempt identity in the first contract.** It cannot
+  be: it is counted per rig, so a retry elsewhere can carry a smaller one.
+  Attempts are now counted on the experiment. ADR 0004.
+- **The scheduler was going to renew leases.** The rig does, through its
+  heartbeat, so a scheduler crash loses nothing. ADR 0002.
+- **The reaper requeued on any lapsed lease.** After a control plane outage
+  every lease has lapsed with the work still running, so it now needs proof
+  that the attempt is dead, and it settles after its own pauses.
+- **Agents tracked their benchmark process groups only in memory.** An agent
+  killed mid-run left its benchmark running beside the next measurement. The
+  groups are now recorded on disk and reaped at startup.
+- **Interval times were relative to the agent process.** A restarted agent
+  restarted the clock, which would have made intervals from before and after
+  a restart incomparable. They now use the host's monotonic clock.
+- **The gate ran only at preflight.** Bursty load that starts afterwards
+  passed straight through, so a spec can now gate every iteration.
+- **The first unfenced control showed no overlap at all.** Each new session's
+  preflight was killing every process the agent had ever launched, including
+  the other session's, which is accidental fencing. Stale process reaping is
+  now limited to sessions that have finished, and the control overlaps as it
+  should. Without the control, the fenced result would have looked identical
+  and proved nothing.
+- **A scheduler waking from a freeze could resurrect an abandoned attempt**
+  by marking it dispatched, and an agent would then retry a refused
+  completion forever. Both were found by the first fence trial, not by the
+  unit tests, and both now have tests that fail without the fix.
+
 ## 1. The claim this repo has to earn
 
 A benchmark scheduler is easy to write and hard to believe. Every one of them

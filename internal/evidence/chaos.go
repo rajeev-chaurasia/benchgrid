@@ -10,6 +10,7 @@ import (
 
 	"github.com/rajeev-chaurasia/benchgrid/internal/agent"
 	"github.com/rajeev-chaurasia/benchgrid/internal/artifact"
+	"github.com/rajeev-chaurasia/benchgrid/internal/capability"
 )
 
 type Fault struct {
@@ -68,11 +69,14 @@ type ChaosSummary struct {
 	AttemptsHist    map[string]int `json:"attempts_histogram"`
 	ArtifactsSealed int            `json:"final_attempts_sealed_and_verified"`
 	ArtifactErrors  []string       `json:"artifact_errors"`
-	ProcessOverlaps int            `json:"process_overlaps"`
-	SessionOverlaps int            `json:"session_overlaps"`
-	ProcessRuns     int            `json:"process_intervals"`
-	RigsLeasedAtEnd int            `json:"rigs_still_leased_at_end"`
-	QuarantinedRigs []Quarantine   `json:"quarantined_rigs"`
+	// PlacementViolations counts verified runs whose rig, as the run itself
+	// records it, does not satisfy the run's own spec.
+	PlacementViolations int          `json:"placement_violations"`
+	ProcessOverlaps     int          `json:"process_overlaps"`
+	SessionOverlaps     int          `json:"session_overlaps"`
+	ProcessRuns         int          `json:"process_intervals"`
+	RigsLeasedAtEnd     int          `json:"rigs_still_leased_at_end"`
+	QuarantinedRigs     []Quarantine `json:"quarantined_rigs"`
 }
 
 // SummarizeChaos counts outcomes against expectations and checks, for every
@@ -117,6 +121,9 @@ func SummarizeChaos(exps []ChaosExperiment, faults []Fault, intervals []agent.In
 		default:
 			s.ArtifactsSealed++
 		}
+		if err == nil && !Placed(run) {
+			s.PlacementViolations++
+		}
 	}
 	sort.Slice(s.Misses, func(i, j int) bool { return s.Misses[i].ID < s.Misses[j].ID })
 	var proc, sess []Span
@@ -155,4 +162,22 @@ func finalArtifact(e ChaosExperiment) (status string, required bool) {
 		}
 	}
 	return "", false
+}
+
+// Placed reports whether a run's rig satisfied its spec, judged from the run
+// alone. Tags and profilers are scheduling inputs the run does not record, so
+// they are checked through the hardware class they come with.
+func Placed(run artifact.Run) bool {
+	r := run.Rig
+	req := run.Spec.Requirements
+	req.Tags, req.Profilers = nil, nil
+	rig := capability.Rig{
+		RigID: r.RigID, HardwareClass: r.HardwareClass, Arch: r.Arch, OS: r.OS,
+		CPUCores: r.CPUCores, MemBytes: r.MemBytes, GPUVendor: r.GPUVendor,
+		GPUModel: r.GPUModel, GPUMemoryBytes: r.GPUMemoryBytes,
+		DriverVersion: r.DriverVersion, Firmware: r.Firmware, Emulated: r.Emulated,
+	}
+	env := run.Spec.Environment
+	env.GovernorRequired = false
+	return len(capability.Match(req, env, rig)) == 0
 }

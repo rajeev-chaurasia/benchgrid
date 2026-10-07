@@ -206,6 +206,9 @@ func (c *check) chaos() {
 	if len(r.ArtifactErrors) != 0 {
 		c.fail("chaos: %d final attempts without a matching verified artifact", len(r.ArtifactErrors))
 	}
+	if r.PlacementViolations != 0 {
+		c.fail("CLAIM: %d runs landed on a rig their spec did not allow", r.PlacementViolations)
+	}
 	if r.RigsLeasedAtEnd != 0 {
 		c.fail("chaos: %d rigs still leased after every experiment finished", r.RigsLeasedAtEnd)
 	}

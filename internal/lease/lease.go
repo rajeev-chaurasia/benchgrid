@@ -77,11 +77,23 @@ func Renew(ctx context.Context, db DB, rigID string, fence int64, ttl time.Durat
 // completion from a superseded attempt cannot free a rig that someone else now
 // holds.
 func Release(ctx context.Context, db DB, rigID string, fence int64) (bool, error) {
-	tag, err := db.Exec(ctx, `
+	_, ok, err := ReleaseAt(ctx, db, rigID, fence)
+	return ok, err
+}
+
+// ReleaseAt is Release that also reports when, on the database clock, which
+// is what the lease race evidence measures holder intervals against.
+func ReleaseAt(ctx context.Context, db DB, rigID string, fence int64) (time.Time, bool, error) {
+	var at time.Time
+	err := db.QueryRow(ctx, `
 		UPDATE rigs
 		   SET holder = NULL, experiment_id = NULL, attempt = NULL,
 		       expires_at = NULL, last_released_at = clock_timestamp()
-		 WHERE id = $1 AND fence = $2 AND holder IS NOT NULL`,
-		rigID, fence)
-	return tag.RowsAffected() == 1, err
+		 WHERE id = $1 AND fence = $2 AND holder IS NOT NULL
+		RETURNING last_released_at`,
+		rigID, fence).Scan(&at)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	return at, err == nil, err
 }

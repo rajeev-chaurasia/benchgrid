@@ -12,13 +12,14 @@ import (
 	"time"
 
 	"github.com/rajeev-chaurasia/benchgrid/internal/evidence"
+	"github.com/rajeev-chaurasia/benchgrid/internal/probe"
 	"github.com/rajeev-chaurasia/benchgrid/internal/spec"
 )
 
 const (
 	chaosReplicas    = 3
 	chaosRigs        = 8
-	chaosExperiments = 300
+	chaosExperiments = 600
 	chaosFaultWindow = 4 * time.Minute
 	chaosTTL         = 3 * time.Second
 )
@@ -28,10 +29,17 @@ func (h *harness) chaos(ctx context.Context) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
+	profiles, err := writeProfiles(filepath.Join(h.scratch, "chaos-profiles"))
+	if err != nil {
+		return err
+	}
 	c, err := h.newCluster(ctx, "chaos", clusterConfig{
 		replicas:   chaosReplicas,
 		serverArgs: []string{"-lease-ttl", chaosTTL.String(), "-tick", "100ms", "-fault-artifact-error-rate", "0.2"},
 		rigs:       chaosRigs,
+		agentArgs: func(i int) []string {
+			return []string{"-profile", profiles[i%len(profiles)]}
+		},
 	})
 	if err != nil {
 		return err
@@ -65,7 +73,7 @@ func (h *harness) chaos(ctx context.Context) error {
 			args = append(args, "-exit", "3")
 		}
 		s := benchSpec(fmt.Sprintf("%040x", 0xc0000+i), args...)
-		s.Requirements.AllowEmulated = true
+		s.Requirements = rigClasses[i%len(rigClasses)].requires
 		id, err := c.submitRetrying(s, fmt.Sprintf("chaos-%d", i))
 		if err != nil {
 			close(stop)
@@ -256,6 +264,40 @@ func (c *cluster) injectFaults(stop <-chan struct{}, epoch time.Time) []evidence
 		next:
 		}
 	}
+}
+
+// Four emulated hardware classes, two rigs each, and an experiment mix that
+// needs each of them, so placement is exercised under every fault and checked
+// afterwards against what each run's rig actually was. gpu-b has a driver
+// too old for the experiments that need a GPU, so it is a rig that looks
+// right by vendor and must still be refused.
+var rigClasses = []struct {
+	profile  probe.Profile
+	requires spec.Requirements
+}{
+	{probe.Profile{HardwareClass: "cpu-a"},
+		spec.Requirements{HardwareClass: "cpu-a", AllowEmulated: true}},
+	{probe.Profile{HardwareClass: "gpu-a", GPUVendor: "nvidia", GPUModel: "emulated-a", GPUMemoryBytes: 24 << 30, DriverVersion: "550.54"},
+		spec.Requirements{GPUVendor: "nvidia", Driver: ">=550", MinGPUMemoryBytes: 16 << 30, AllowEmulated: true}},
+	{probe.Profile{HardwareClass: "gpu-b", GPUVendor: "nvidia", GPUModel: "emulated-b", GPUMemoryBytes: 16 << 30, DriverVersion: "535.183"},
+		spec.Requirements{AllowEmulated: true}},
+	{probe.Profile{HardwareClass: "edge-a", Firmware: "2.1.0", Tags: []string{"edge"}},
+		spec.Requirements{HardwareClass: "edge-a", Tags: []string{"edge"}, AllowEmulated: true}},
+}
+
+func writeProfiles(dir string) ([]string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	var paths []string
+	for _, c := range rigClasses {
+		p := filepath.Join(dir, c.profile.HardwareClass+".json")
+		if err := evidence.WriteJSON(p, c.profile); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, nil
 }
 
 func copyDir(src, dst string) error {

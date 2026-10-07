@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rajeev-chaurasia/benchgrid/internal/artifact"
+	"github.com/rajeev-chaurasia/benchgrid/internal/spec"
 )
 
 func TestOverlapPairs(t *testing.T) {
@@ -48,5 +51,23 @@ func TestManifestCatchesEditAndAddition(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "c.json"), []byte("4"), 0o644)
 	if VerifyManifest(dir) == nil {
 		t.Error("addition not caught")
+	}
+}
+
+func TestPlacedRejectsARigThatOnlyLooksRight(t *testing.T) {
+	run := artifact.Run{
+		Spec: spec.Spec{Requirements: spec.Requirements{GPUVendor: "nvidia", Driver: ">=550", AllowEmulated: true}},
+		Rig:  artifact.Rig{HardwareClass: "gpu-b", GPUVendor: "nvidia", DriverVersion: "535.183", Emulated: true},
+	}
+	if Placed(run) {
+		t.Error("a 535 driver satisfied >=550")
+	}
+	run.Rig.DriverVersion = "550.54"
+	if !Placed(run) {
+		t.Error("a matching rig was reported misplaced")
+	}
+	run.Spec.Requirements.AllowEmulated = false
+	if Placed(run) {
+		t.Error("an emulated rig satisfied a spec that does not allow one")
 	}
 }
