@@ -21,6 +21,14 @@ than left as first written. The substantive changes:
   a restart incomparable. They now use the host's monotonic clock.
 - **The gate ran only at preflight.** Bursty load that starts afterwards
   passed straight through, so a spec can now gate every iteration.
+- **Gating before each iteration made things worse.** The first noise trial
+  measured a median CV of 21% with that gate against 17% without it, and a
+  higher median latency, with every loaded run published as a success. A gate
+  that waits for a quiet window passes late in each quiet gap, which lines
+  iterations up with the onset of the next burst. The gate now also measures
+  the background load during each iteration, less the benchmark's own CPU
+  time, and declares the run INVALID if it was busy. The second claim was
+  rewritten around what that design can show.
 - **The first unfenced control showed no overlap at all.** Each new session's
   preflight was killing every process the agent had ever launched, including
   the other session's, which is accidental fencing. Stale process reaping is
