@@ -376,19 +376,34 @@ func (s *Scheduler) abandon(ctx context.Context, experimentID string, attempt in
 	return tx.Commit(ctx)
 }
 
+// budgetLeft is the condition for another attempt. Only attempts that ran
+// count against max_attempts: one that was refused as stale, or whose lease
+// was lost before it started, says nothing about the experiment, and in the
+// first Linux fence trial an experiment ran out of attempts without ever
+// running because its schedulers froze three times. The cap on all attempts
+// is the backstop that stops a control plane failing in a loop from retrying
+// one experiment forever.
+const budgetLeft = `(
+	(SELECT count(*) FROM attempts a
+	  WHERE a.experiment_id = experiments.id AND a.status IN ('SUCCEEDED', 'FAILED', 'INVALID'))
+	< max_attempts
+	AND attempt < max_attempts * 5)`
+
 // requeue returns an experiment to the queue, or fails it when it has used
-// every attempt. It does nothing if the experiment has already moved past the
+// its budget. It does nothing if the experiment has already moved past the
 // given attempt.
 func requeue(ctx context.Context, tx pgx.Tx, experimentID string, attempt int, reason string) error {
-	_, err := tx.Exec(ctx, `
-		UPDATE experiments
-		   SET state = CASE WHEN attempt < max_attempts THEN 'QUEUED' ELSE 'FAILED' END,
-		       status_reason = CASE WHEN attempt < max_attempts THEN $3 ELSE 'attempts_exhausted:' || $3 END,
-		       finished_at = CASE WHEN attempt < max_attempts THEN NULL ELSE clock_timestamp() END,
-		       rig_id = NULL, fence = NULL, updated_at = clock_timestamp()
-		 WHERE id = $1 AND attempt = $2 AND state = 'RUNNING'`, experimentID, attempt, reason)
+	_, err := tx.Exec(ctx, requeueSQL+` AND state = 'RUNNING'`, experimentID, attempt, reason)
 	return err
 }
+
+const requeueSQL = `
+		UPDATE experiments
+		   SET state = CASE WHEN ` + budgetLeft + ` THEN 'QUEUED' ELSE 'FAILED' END,
+		       status_reason = CASE WHEN ` + budgetLeft + ` THEN $3 ELSE 'attempts_exhausted:' || $3 END,
+		       finished_at = CASE WHEN ` + budgetLeft + ` THEN NULL ELSE clock_timestamp() END,
+		       rig_id = NULL, fence = NULL, updated_at = clock_timestamp()
+		 WHERE id = $1 AND attempt = $2`
 
 // Reap requeues every running experiment whose lease is no longer live:
 // someone else now holds its rig, or the lease lapsed and the rig has shown it

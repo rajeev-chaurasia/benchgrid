@@ -73,13 +73,7 @@ func Complete(ctx context.Context, db *pgxpool.Pool, experimentID string, attemp
 
 	retry := Retryable(c.Status, c.StatusReason)
 	if retry {
-		_, err = tx.Exec(ctx, `
-			UPDATE experiments
-			   SET state = CASE WHEN attempt < max_attempts THEN 'QUEUED' ELSE 'FAILED' END,
-			       status_reason = CASE WHEN attempt < max_attempts THEN $3 ELSE 'attempts_exhausted:' || $3 END,
-			       finished_at = CASE WHEN attempt < max_attempts THEN NULL ELSE clock_timestamp() END,
-			       rig_id = NULL, fence = NULL, updated_at = clock_timestamp()
-			 WHERE id = $1 AND attempt = $2 AND state IN ('RUNNING', 'QUEUED')`,
+		_, err = tx.Exec(ctx, requeueSQL+` AND state IN ('RUNNING', 'QUEUED')`,
 			experimentID, attempt, c.Status+":"+c.StatusReason)
 	} else {
 		_, err = tx.Exec(ctx, `

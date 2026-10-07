@@ -371,3 +371,29 @@ func TestLateDispatchRecordDoesNotResurrect(t *testing.T) {
 		t.Errorf("abandoned attempt rewritten to %s", st)
 	}
 }
+
+// An attempt refused as stale never ran, so it must not use up the
+// experiment's budget, or a run of scheduler freezes fails an experiment that
+// was never measured.
+func TestRefusalsDoNotSpendTheBudget(t *testing.T) {
+	db := testdb.Open(t, "sched")
+	a := newFakeAgent(t, false, wire.RejectStaleFence)
+	addRig(t, db, capability.Rig{RigID: "r", Emulated: true, Endpoint: a.srv.URL})
+	submit(t, db, "exp_b", baseSpec(), 1)
+	sc := New(Config{ID: "t"}, db, nil)
+	for i := 1; i <= 4; i++ {
+		placed, _ := sc.Place(ctx)
+		if len(placed) != 1 {
+			t.Fatalf("attempt %d not placed", i)
+		}
+		sc.dispatch(ctx, placed[0])
+		if e := load(t, db, "exp_b"); e.state != "QUEUED" {
+			t.Fatalf("attempt %d: refusals spent the budget: %+v", i, e)
+		}
+	}
+	placed, _ := sc.Place(ctx)
+	sc.dispatch(ctx, placed[0])
+	if e := load(t, db, "exp_b"); e.state != "FAILED" || !strings.HasPrefix(e.reason, "attempts_exhausted") {
+		t.Errorf("the backstop did not stop the loop: %+v", e)
+	}
+}
