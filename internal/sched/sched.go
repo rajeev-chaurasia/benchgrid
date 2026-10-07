@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -228,7 +229,11 @@ func (s *Scheduler) Place(ctx context.Context) (placed []placement, err error) {
 			s.m.Unplaceable.Inc()
 			continue
 		}
-		rank(eligible)
+		preferred, err := affinityRig(ctx, tx, q.spec.Affinity)
+		if err != nil {
+			return nil, err
+		}
+		rank(eligible, preferred)
 		attempt := q.attempt + 1
 		for _, c := range eligible {
 			g, ok, err := lease.Acquire(ctx, tx, c.rig.RigID, s.cfg.ID, q.id, attempt, s.cfg.LeaseTTL)
@@ -292,13 +297,34 @@ func (s *Scheduler) freeRigs(ctx context.Context, tx pgx.Tx) ([]candidate, error
 // equivalent rigs and gives the one that just finished a heavy run the most
 // time to cool before it is measured on again. The id breaks ties so the
 // order is deterministic.
-func rank(cs []candidate) {
+func rank(cs []candidate, preferred string) {
 	sort.Slice(cs, func(i, j int) bool {
+		if pi, pj := cs[i].rig.RigID == preferred, cs[j].rig.RigID == preferred; pi != pj {
+			return pi
+		}
 		if !cs[i].lastReleased.Equal(cs[j].lastReleased) {
 			return cs[i].lastReleased.Before(cs[j].lastReleased)
 		}
 		return cs[i].rig.RigID < cs[j].rig.RigID
 	})
+}
+
+// affinityRig is the rig that most recently ran an experiment with this
+// affinity key, or none. It only orders candidates: if that rig is busy or
+// ineligible the experiment goes elsewhere rather than waiting for it.
+func affinityRig(ctx context.Context, tx pgx.Tx, key string) (string, error) {
+	if key == "" {
+		return "", nil
+	}
+	var rig string
+	err := tx.QueryRow(ctx, `
+		SELECT a.rig_id FROM attempts a JOIN experiments e ON e.id = a.experiment_id
+		 WHERE e.spec->>'affinity' = $1
+		 ORDER BY a.leased_at DESC LIMIT 1`, key).Scan(&rig)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return rig, err
 }
 
 func without(cs []candidate, id string) []candidate {

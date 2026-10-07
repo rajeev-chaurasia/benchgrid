@@ -27,6 +27,11 @@ type Spec struct {
 	// what is measured, perf most of all, so it is part of the spec and of its
 	// hash, and a run with one is never comparable to a run without.
 	Collectors []string `json:"collectors,omitempty"`
+	// Affinity is a soft placement preference: experiments sharing a key
+	// prefer the rig that most recently ran that key. Paired baseline and
+	// candidate runs share one, so they tend to be measured on the same
+	// machine, without either being pinned to a rig by name.
+	Affinity string `json:"affinity,omitempty"`
 }
 
 type Requirements struct {

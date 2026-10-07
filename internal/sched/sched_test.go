@@ -397,3 +397,33 @@ func TestRefusalsDoNotSpendTheBudget(t *testing.T) {
 		t.Errorf("the backstop did not stop the loop: %+v", e)
 	}
 }
+
+// Experiments sharing an affinity key prefer the rig the key last ran on,
+// even over a rig that has been idle longer, and fall back when it is busy.
+func TestAffinityPrefersTheLastRig(t *testing.T) {
+	db := testdb.Open(t, "sched")
+	a := newFakeAgent(t, true, "")
+	addRig(t, db, capability.Rig{RigID: "r-old", Emulated: true, Endpoint: a.srv.URL})
+	addRig(t, db, capability.Rig{RigID: "r-new", Emulated: true, Endpoint: a.srv.URL})
+	db.Exec(ctx, `UPDATE rigs SET last_released_at = clock_timestamp() WHERE id = 'r-new'`)
+	sp := baseSpec()
+	sp.Affinity = "cmp-1"
+	submit(t, db, "exp_base", sp, 3)
+	sc := New(Config{ID: "t"}, db, nil)
+	p1, _ := sc.Place(ctx)
+	if len(p1) != 1 || p1[0].Rig.RigID != "r-old" {
+		t.Fatalf("first placement %+v", p1)
+	}
+	Complete(ctx, db, "exp_base", 1, wire.Completion{RigID: "r-old", Fence: p1[0].Grant.Fence, Status: "SUCCEEDED"})
+	db.Exec(ctx, `UPDATE rigs SET last_released_at = clock_timestamp() + interval '1 hour' WHERE id = 'r-old'`)
+	submit(t, db, "exp_cand", sp, 3)
+	p2, _ := sc.Place(ctx)
+	if len(p2) != 1 || p2[0].Rig.RigID != "r-old" {
+		t.Errorf("affinity ignored: %+v", p2)
+	}
+	submit(t, db, "exp_cand2", sp, 3)
+	p3, _ := sc.Place(ctx)
+	if len(p3) != 1 || p3[0].Rig.RigID != "r-new" {
+		t.Errorf("did not fall back while the preferred rig was busy: %+v", p3)
+	}
+}
