@@ -182,8 +182,8 @@ func render(dir string) (map[string]string, error) {
 	b["lease"] = r.String()
 
 	var f strings.Builder
-	f.WriteString("| rigs | agent | experiments | freezes | stale dispatches that reached a rig | refused | overlapping process pairs | overlapping session pairs |\n")
-	f.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	f.WriteString("| rigs | agent | experiments | freezes | partitions | stale dispatches that reached a rig | refused | overlapping process pairs | overlapping session pairs |\n")
+	f.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, set := range []struct {
 		label string
 		rows  []evidence.FenceSummary
@@ -194,8 +194,12 @@ func render(dir string) (map[string]string, error) {
 			if x.Mode == "fenced" {
 				po, so = "**"+po+"**", "**"+so+"**"
 			}
-			fmt.Fprintf(&f, "| %d %s | %s | %d | %d | %d | %d | %s | %s |\n",
-				x.Rigs, set.label, agent, x.Experiments, x.Freezes, x.StaleArrivals, x.StaleRefused, po, so)
+			parts := "n/a"
+			if set.label == "Linux containers" {
+				parts = fmt.Sprint(x.Partitions)
+			}
+			fmt.Fprintf(&f, "| %d %s | %s | %d | %d | %s | %d | %d | %s | %s |\n",
+				x.Rigs, set.label, agent, x.Experiments, x.Freezes, parts, x.StaleArrivals, x.StaleRefused, po, so)
 		}
 	}
 	b["fence"] = f.String()

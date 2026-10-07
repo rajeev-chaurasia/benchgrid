@@ -57,7 +57,12 @@ least one overlapping pair in the control.
 
 The fence run again, with six agents running as Linux containers in Docker's
 Linux VM on the same host, built from a scratch image holding only the agent
-and the benchmark. Everything else is identical, including the control. The
+and the benchmark. Everything else is identical, including the control, with
+one addition: every two to five seconds a random rig container is disconnected
+from the network for the lease TTL plus one to five seconds and then
+reconnected. The agent keeps running throughout, so its lease lapses, its
+attempt is requeued, and it reports a result late, which is what a partition
+does and a crash does not. The
 Linux runs also publish their run artifacts, and the validator checks from
 each one that its rig reports Linux and that every `max_rss` sample is a
 plausible number of bytes, which is how a kilobyte figure read as bytes would

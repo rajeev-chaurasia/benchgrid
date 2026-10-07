@@ -43,6 +43,11 @@ than left as first written. The substantive changes:
   with a cap on all attempts as the backstop.
 - **The README's numbers were typed by hand.** They are now rendered from the
   evidence, and CI fails if the two disagree.
+- **The spec's own feature list had gaps the evidence did not exercise:** the
+  workspace was cleaned but never used as the benchmark's working directory,
+  failures left no diagnostics, there was no perf collector and so no profiler
+  failure to test, and nothing partitioned a rig from the network. Each is now
+  built and tested, and the Linux run partitions rigs while it measures.
 - **Several known misses were closed rather than listed:** an orphaned
   benchmark's lifetime is recorded, reused process group ids are detected, an
   unrecorded launch quarantines the rig, every GPU is read, and the fence

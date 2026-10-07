@@ -46,7 +46,9 @@ one grant in ten left to expire.
 `SIGSTOP` between leasing a rig and dispatching to it, and are resumed after
 the lease has lapsed and the rig has been leased again by someone else. The
 run is done twice: with every agent a process on the host, and with every
-agent a Linux container in Docker's Linux VM on the same laptop.
+agent a Linux container in Docker's Linux VM on the same laptop. In the Linux
+run, rigs are also cut off from the network for longer than their lease while
+they keep running, which a host process cannot be.
 
 <!-- evidence:fence -->
 | rigs | agent | experiments | freezes | stale dispatches that reached a rig | refused | overlapping process pairs | overlapping session pairs |
