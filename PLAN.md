@@ -84,15 +84,17 @@ Three things follow from that wording, and they drive the design:
    would mean the freezes stopped landing where they matter.
 
 There is a second claim, weaker and stated separately in the README because a
-combined claim would be weaker than the first one alone:
+combined claim would be weaker than the first one alone. As first planned it
+said the gate would keep the coefficient of variation close to the unloaded
+value under injected load. Measurement did not support that wording, and
+section 0 says why. What the shipped design does support is narrower:
 
-> With a background load injected on the rig, the preflight gate keeps the
-> coefficient of variation of a fixed CPU benchmark close to the quiet-machine
-> value, and without the gate it does not.
+> With bursty load injected on its host, the measurement gate declined to
+> publish nearly every run that an ungated agent published with a much wider
+> spread.
 
-It is weaker because it is measured on one machine with a synthetic noise
-source, and the number it produces is about that machine, not about rigs in
-general. `docs/known-misses.md` says so.
+The README states it with the measured counts, including the loaded run that
+got through and the unloaded runs the gate declined.
 
 ## 2. Verified environment
 
@@ -100,7 +102,7 @@ Checked on this machine, not assumed:
 
 | Component | Local | Notes |
 | --- | --- | --- |
-| Go | 1.25.4 (homebrew) | `go.mod` pins 1.25 |
+| Go | 1.25.4 (homebrew), toolchain 1.26.0 | a dependency upgrade raised `go.mod` to 1.26.0, and the Go command fetches that toolchain; the evidence records go1.26.0 |
 | PostgreSQL | 14.18 (homebrew) | running |
 | Docker | 28.0.4 | daemon running, used for Linux agents |
 | protoc | present | not used, see section 3 |
