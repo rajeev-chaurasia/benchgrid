@@ -37,6 +37,13 @@ type Rig struct {
 // Match returns every reason a rig is unsuitable rather than the first, so an
 // experiment stuck in the queue can say exactly why no rig will take it.
 func Match(req spec.Requirements, env spec.Environment, r Rig) []string {
+	return MatchSpec(spec.Spec{Requirements: req, Environment: env}, r)
+}
+
+// MatchSpec is Match for a whole spec, which also needs every collector it
+// asks for to be installed on the rig.
+func MatchSpec(sp spec.Spec, r Rig) []string {
+	req, env := sp.Requirements, sp.Environment
 	var why []string
 	miss := func(f string, a ...any) { why = append(why, fmt.Sprintf(f, a...)) }
 
@@ -85,6 +92,11 @@ func Match(req spec.Requirements, env spec.Environment, r Rig) []string {
 	}
 	if env.GovernorRequired && !slices.Contains(r.Governors, env.CPUGovernor) {
 		miss("cannot set governor %s", env.CPUGovernor)
+	}
+	for _, c := range sp.Collectors {
+		if !slices.Contains(r.Profilers, c) {
+			miss("collector %s is not installed", c)
+		}
 	}
 	return why
 }

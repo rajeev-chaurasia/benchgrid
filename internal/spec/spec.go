@@ -23,6 +23,10 @@ type Spec struct {
 	Environment    Environment  `json:"environment"`
 	Metrics        []Metric     `json:"metrics"`
 	Artifacts      Artifacts    `json:"artifacts"`
+	// Collectors wrap every iteration in a measuring tool. A collector changes
+	// what is measured, perf most of all, so it is part of the spec and of its
+	// hash, and a run with one is never comparable to a run without.
+	Collectors []string `json:"collectors,omitempty"`
 }
 
 type Requirements struct {
@@ -88,6 +92,17 @@ var Builtin = map[string]string{
 	"cpu_sys":           "ns",
 	"max_rss":           "bytes",
 }
+
+// PerfMetrics are produced by the perf collector, in fixed units.
+var PerfMetrics = map[string]string{
+	"cycles":           "count",
+	"instructions":     "count",
+	"cache_misses":     "count",
+	"context_switches": "count",
+	"ipc":              "unitless",
+}
+
+var KnownCollectors = map[string]bool{"perf": true}
 
 const BinaryPlaceholder = "{binary}"
 
@@ -160,8 +175,21 @@ func (s Spec) Validate() error {
 		if u, ok := Builtin[m.Name]; ok && u != m.Unit {
 			bad("builtin metric %q is measured in %s, not %s", m.Name, u, m.Unit)
 		}
+		if u, ok := PerfMetrics[m.Name]; ok {
+			if u != m.Unit {
+				bad("perf metric %q is measured in %s, not %s", m.Name, u, m.Unit)
+			}
+			if !s.HasCollector("perf") {
+				bad("metric %q needs the perf collector", m.Name)
+			}
+		}
 		if m.Direction != "lower_is_better" && m.Direction != "higher_is_better" {
 			bad("metric %q direction must be lower_is_better or higher_is_better", m.Name)
+		}
+	}
+	for _, c := range s.Collectors {
+		if !KnownCollectors[c] {
+			bad("unknown collector %q", c)
 		}
 	}
 	if d := s.Requirements.Driver; d != "" {
@@ -193,4 +221,13 @@ func (s Spec) Metric(name string) (Metric, bool) {
 		}
 	}
 	return Metric{}, false
+}
+
+func (s Spec) HasCollector(name string) bool {
+	for _, c := range s.Collectors {
+		if c == name {
+			return true
+		}
+	}
+	return false
 }

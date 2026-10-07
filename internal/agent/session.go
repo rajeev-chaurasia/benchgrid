@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -157,7 +158,7 @@ func (a *Agent) execute(s *session) outcome {
 	defer cancel()
 
 	s.setPhase(PhasePreflight)
-	if why := capability.Match(sp.Requirements, sp.Environment, a.describe(ctx)); len(why) > 0 {
+	if why := capability.MatchSpec(sp, a.describe(ctx)); len(why) > 0 {
 		// The rig no longer is what it advertised. Nothing it measures can be
 		// trusted until an operator looks.
 		a.quarantine("identity:" + why[0])
@@ -182,6 +183,15 @@ func (a *Agent) execute(s *session) outcome {
 			return fail(artifact.Invalid, cancelReason(ctx))
 		}
 		return fail(artifact.Invalid, "preflight:"+field)
+	}
+
+	var perfPath string
+	if sp.HasCollector("perf") {
+		p, err := exec.LookPath("perf")
+		if err != nil {
+			return fail(artifact.Invalid, "collector:perf_missing")
+		}
+		perfPath = p
 	}
 
 	// Every attempt runs in a workspace of its own, created empty and removed
@@ -215,8 +225,14 @@ func (a *Agent) execute(s *session) outcome {
 			measuredStart = time.Now()
 			busyStart, haveBusy = probe.BusyCPUSeconds(ctx)
 		}
+		cmdline := argv
+		perfOut := ""
+		if sp.HasCollector("perf") {
+			perfOut = filepath.Join(workspace, fmt.Sprintf("perf-%d.csv", i))
+			cmdline = perfWrap(perfPath, argv, sp, perfOut)
+		}
 		r, err := runIteration(ctx, iteration{
-			argv: argv, dir: workspace, env: benchmarkEnv(workspace, i, i < sp.Warmups), clock: a.clock,
+			argv: cmdline, dir: workspace, env: benchmarkEnv(workspace, i, i < sp.Warmups), clock: a.clock,
 			beforeStart: func() { a.markLaunching(s) },
 			onStart: func(pid int, startNS int64) {
 				s.mu.Lock()
@@ -239,7 +255,7 @@ func (a *Agent) execute(s *session) outcome {
 			first = r.StartNS
 		}
 		if r.Cancelled || err != nil || r.Signal != "" || r.ExitCode != 0 {
-			out.diagnostics = diagnose(i, argv, r, err)
+			out.diagnostics = diagnose(i, cmdline, r, err)
 		}
 		if r.Cancelled {
 			return fail(artifact.Failed, cancelReason(ctx))
@@ -261,6 +277,18 @@ func (a *Agent) execute(s *session) outcome {
 			"cpu_user":          float64(r.UserNS),
 			"cpu_sys":           float64(r.SysNS),
 			"max_rss":           float64(r.MaxRSS),
+		}
+		if perfOut != "" {
+			counts, err := parsePerf(perfOut, sp)
+			if err != nil {
+				// The profiler failing is not the benchmark failing, and not the
+				// rig either, so the run is invalid and retried rather than failed.
+				out.diagnostics = diagnose(i, cmdline, r, err)
+				return fail(artifact.Invalid, "collector:perf")
+			}
+			for k, v := range counts {
+				values[k] = v
+			}
 		}
 		for k, v := range r.Reported {
 			if _, builtin := spec.Builtin[k]; !builtin {

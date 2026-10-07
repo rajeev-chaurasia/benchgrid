@@ -13,6 +13,16 @@ about how a benchmark behaves on the hardware an emulated rig imitates. Every
 run says `emulated` where that applies, and the host is recorded in
 `env.json`.
 
+## perf has never counted a real event here
+
+The perf collector wraps each iteration in `perf stat` and turns its counts
+into metrics, and it fails a run that asked for a counter perf could not
+provide. Neither macOS nor Docker's Linux VM exposes hardware counters, so it
+has only ever run against a stand-in perf that writes hand-written output in
+perf's documented format. Running under perf also adds its own overhead to
+every iteration's latency, which is why a spec with a collector hashes
+differently from one without and is never compared with it.
+
 ## The CPU governor has never been set on real hardware
 
 Neither macOS nor Docker's Linux VM exposes cpufreq, so no evidence run has

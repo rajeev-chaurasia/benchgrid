@@ -220,7 +220,7 @@ func (s *Scheduler) Place(ctx context.Context) (placed []placement, err error) {
 	for _, q := range queue {
 		var eligible []candidate
 		for _, c := range free {
-			if len(capability.Match(q.spec.Requirements, q.spec.Environment, c.rig)) == 0 {
+			if len(capability.MatchSpec(q.spec, c.rig)) == 0 {
 				eligible = append(eligible, c)
 			}
 		}
