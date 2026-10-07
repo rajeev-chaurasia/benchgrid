@@ -26,8 +26,9 @@ not the kernel's.
 Schedulers stop themselves at the one point where a freeze turns into a stale
 dispatch: after committing a lease, before sending it. The chaos run's freezes
 and kills land at random and also produce stale dispatches, and its summary
-counts them, so the README shows both the aimed and the unaided rate. The
-unaided count is small, which is the point of aiming.
+counts them, so the README shows both the aimed and the unaided count. The
+aimed run exists because the unaided rate is too low to measure the fence
+against in a run of this length.
 
 ## An orphan's end time is an upper bound
 
@@ -48,10 +49,10 @@ process is loose. That is safe and occasionally inconvenient.
 ## Process group ids are checked, not just trusted
 
 A recorded group whose leader now has a different creation time is assumed
-reused and left alone. If the original leader exited and its group lived on,
-and the operating system then reused the id for a new leader, the old
-group's surviving members would be missed. Both have to happen within one
-agent restart.
+reused and left alone. That is only correct because POSIX systems do not
+reuse a process id while a process group with that id still exists, so a
+leader with a new creation time means the old group is gone. A system that
+broke that rule would make the agent leave a stale group running.
 
 ## A multi-GPU rig is described as uniform
 
