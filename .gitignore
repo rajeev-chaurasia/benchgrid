@@ -3,3 +3,5 @@
 *.test
 *.out
 /build/
+/python/.venv/
+__pycache__/
