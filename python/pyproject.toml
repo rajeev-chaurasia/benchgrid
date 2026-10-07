@@ -13,6 +13,7 @@ dependencies = [
 benchgrid-gate = "benchgrid_tools.gate:main"
 benchgrid-evaluate = "benchgrid_tools.evaluate:main"
 benchgrid-bq = "benchgrid_tools.bq:main"
+benchgrid-study = "benchgrid_tools.studies:main"
 
 [dependency-groups]
 dev = ["pytest>=8.0"]

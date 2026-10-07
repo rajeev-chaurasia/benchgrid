@@ -77,6 +77,39 @@ RestartSec=2
 [Install]
 WantedBy=multi-user.target
 UNIT
+# A stand-in for a co-located service: when the instance's benchgrid-noise
+# metadata is "on", core 0 is kept busy in bursts of 0.3 to 1.5 seconds with
+# gaps of the same range. Every node runs the same noise. On a tuned node,
+# core 0 is the system core and the benchmark is isolated from it; on a
+# default node, the benchmark can be scheduled onto it. The isolation study
+# turns it on and off for the whole fleet at once.
+cat >/usr/local/bin/benchgrid-noise <<'NOISE'
+#!/bin/bash
+md='http://metadata.google.internal/computeMetadata/v1/instance/attributes/benchgrid-noise'
+secs() { printf '%d.%03d' $(($1 / 1000)) $(($1 % 1000)); }
+while true; do
+  if [ "$(curl -fsS -H 'Metadata-Flavor: Google' "$md" 2>/dev/null)" = on ]; then
+    on=$(( (RANDOM % 1200) + 300 )) off=$(( (RANDOM % 1200) + 300 ))
+    timeout "$(secs $on)" taskset -c 0 bash -c 'while :; do :; done' || true
+    sleep "$(secs $off)"
+  else
+    sleep 2
+  fi
+done
+NOISE
+chmod 0755 /usr/local/bin/benchgrid-noise
+cat >/etc/systemd/system/benchgrid-noise.service <<UNIT
+[Unit]
+Description=benchgrid noise source for the isolation study
+
+[Service]
+ExecStart=/usr/local/bin/benchgrid-noise
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 systemctl daemon-reload
-systemctl enable rigagent
-systemctl restart rigagent
+systemctl enable rigagent benchgrid-noise
+systemctl restart rigagent benchgrid-noise
