@@ -1,0 +1,382 @@
+[
+  {
+    "condition": "loaded_gated",
+    "runs": 12,
+    "succeeded": 0,
+    "invalid": 12,
+    "median_cv_of_succeeded": null,
+    "max_cv_of_succeeded": null,
+    "median_of_median_latency_ns": null,
+    "per_run": [
+      {
+        "id": "exp_01a1178ed9ff81e31b12ed82ca4b3f8d",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a117900ed4c0a944e49b6073033d37",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11790784af4cfdfe5a37d6db3202b",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a1179116db0642e208fe8ea9394278",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a1179179598533a0fba4333a362d5e",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11791f14f1f97d2ec84263cc23b44",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a117926a07a994ca92bcd969339942",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11792d9c3e1a46d73e9b46c4f11c6",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a117935fa88b84b401f278eed20a4d",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11793ed234aae869045d37cf24901",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11794c5489de572860e1b7b20bea8",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a1179542fe62dba40d3efce57d2da1",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      }
+    ]
+  },
+  {
+    "condition": "loaded_ungated",
+    "runs": 12,
+    "succeeded": 12,
+    "invalid": 0,
+    "median_cv_of_succeeded": 0.49494218177470595,
+    "max_cv_of_succeeded": 1.204948009669723,
+    "median_of_median_latency_ns": 87007708.25,
+    "per_run": [
+      {
+        "id": "exp_01a1178eaebdb10d5aade0115faf2dff",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.821892714099307,
+        "median_ns": 176322083
+      },
+      {
+        "id": "exp_01a1178ff69eef37e7a3ff1a2c475432",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.4605160813866674,
+        "median_ns": 79019812
+      },
+      {
+        "id": "exp_01a117906a1679281e5f029a5f365ef5",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.36118867699786034,
+        "median_ns": 51145687.5
+      },
+      {
+        "id": "exp_01a11790f9a7211c7dc6cecb44f381d2",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.3752849805373698,
+        "median_ns": 130015416.5
+      },
+      {
+        "id": "exp_01a11791635556f9980a9a863ba31948",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.5242871984985827,
+        "median_ns": 91255437.5
+      },
+      {
+        "id": "exp_01a11791d94522089fffb3dcfb1092a2",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.912169907073,
+        "median_ns": 92075583.5
+      },
+      {
+        "id": "exp_01a11792538358726f239f49c222f5f4",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.4549141562553382,
+        "median_ns": 100796042
+      },
+      {
+        "id": "exp_01a11792c9d5f3c87852865a6d68f01a",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.5100305530652836,
+        "median_ns": 56208416.5
+      },
+      {
+        "id": "exp_01a117934bc58db03614a66f62aa47bd",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.5600288214375558,
+        "median_ns": 72527083.5
+      },
+      {
+        "id": "exp_01a11793dca10c2fbe38934ff253929a",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.4798538104841284,
+        "median_ns": 54726770.5
+      },
+      {
+        "id": "exp_01a117949d414c78c3eea4ef543571e3",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 1.204948009669723,
+        "median_ns": 150364770.5
+      },
+      {
+        "id": "exp_01a117952ebf6922a63ada5b33a8132e",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.4561474612366747,
+        "median_ns": 82759979
+      }
+    ]
+  },
+  {
+    "condition": "quiet",
+    "runs": 12,
+    "succeeded": 12,
+    "invalid": 0,
+    "median_cv_of_succeeded": 0.38490096033706533,
+    "max_cv_of_succeeded": 0.6181746930297116,
+    "median_of_median_latency_ns": 99882219,
+    "per_run": [
+      {
+        "id": "exp_01a1178e4b8cc89c2350c670465e3abd",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.6181746930297116,
+        "median_ns": 174038833.5
+      },
+      {
+        "id": "exp_01a1178f6521f9b7fee6806e14f46be9",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.5313584636626336,
+        "median_ns": 146524187
+      },
+      {
+        "id": "exp_01a1179038a1440e111fca1a99382016",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.3740773467177644,
+        "median_ns": 84092500
+      },
+      {
+        "id": "exp_01a11790bba2a60112b8b437ebfe9810",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.39572457395636623,
+        "median_ns": 100839104.5
+      },
+      {
+        "id": "exp_01a11791369f2cf47bb909448d73fbd6",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.4007400129300518,
+        "median_ns": 61152979
+      },
+      {
+        "id": "exp_01a11791a01e518a81fbe693e03af29f",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.3412747035354803,
+        "median_ns": 119960896
+      },
+      {
+        "id": "exp_01a117921e9f1996e0dc759a6d71adc0",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.2915428141224455,
+        "median_ns": 98925333.5
+      },
+      {
+        "id": "exp_01a1179290c5f395ec753386bca6783a",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.46381773013229405,
+        "median_ns": 123369354
+      },
+      {
+        "id": "exp_01a1179329cd5bad68793368f31b1906",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.3374455574525725,
+        "median_ns": 55533812.5
+      },
+      {
+        "id": "exp_01a1179383edc875daafddd83ea77d6c",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.32880136813709177,
+        "median_ns": 138957563
+      },
+      {
+        "id": "exp_01a117944749c6d7cf98237b29d7e39f",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.29202568332838097,
+        "median_ns": 60577854
+      },
+      {
+        "id": "exp_01a11794fbbabf3c716cfadd14de2938",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.4162437846900669,
+        "median_ns": 82261520.5
+      }
+    ]
+  },
+  {
+    "condition": "quiet_gated",
+    "runs": 12,
+    "succeeded": 0,
+    "invalid": 12,
+    "median_cv_of_succeeded": null,
+    "max_cv_of_succeeded": null,
+    "median_of_median_latency_ns": null,
+    "per_run": [
+      {
+        "id": "exp_01a1178e8495e2696efbed13e703cf11",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a1178fa07caa51a4064aeb1a4d7ba4",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a1179050c9c5319300ed3b9a1e8211",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11790d27cdab3fda4da526ba4070b",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a1179146d4b7ffcfe7f445d73ab612",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11791b9147f5fefb1e92944cbc348",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a1179235b2ccccc3f3209f5956abd2",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11792acdc476fc10fb133fd699eae",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a117933a6866f74fa6d6556d982f27",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11793a1864bbb155187ee8ef9e0cb",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11794579b43bf67c0c62f8e778d22",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a11795108b68398377e0c9ea7c2322",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,9 @@
+{"metric":"iteration_latency","iteration":0,"warmup":true,"value":326259125,"unit":"ns","t_offset_ns":0}
+{"metric":"max_rss","iteration":0,"warmup":true,"value":4587520,"unit":"bytes","t_offset_ns":0}
+{"metric":"throughput","iteration":0,"warmup":true,"value":1866686.827,"unit":"ops_per_s","t_offset_ns":0}
+{"metric":"iteration_latency","iteration":1,"warmup":false,"value":323500500,"unit":"ns","t_offset_ns":332664000}
+{"metric":"max_rss","iteration":1,"warmup":false,"value":4521984,"unit":"bytes","t_offset_ns":332664000}
+{"metric":"throughput","iteration":1,"warmup":false,"value":2003506.136,"unit":"ops_per_s","t_offset_ns":332664000}
+{"metric":"iteration_latency","iteration":2,"warmup":false,"value":329291583,"unit":"ns","t_offset_ns":662951000}
+{"metric":"max_rss","iteration":2,"warmup":false,"value":4587520,"unit":"bytes","t_offset_ns":662951000}
+{"metric":"throughput","iteration":2,"warmup":false,"value":1264022.752,"unit":"ops_per_s","t_offset_ns":662951000}

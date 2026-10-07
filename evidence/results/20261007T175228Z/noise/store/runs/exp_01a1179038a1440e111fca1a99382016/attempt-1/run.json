@@ -1,0 +1,90 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a1179038a1440e111fca1a99382016",
+  "attempt": 1,
+  "fence": 9,
+  "status": "SUCCEEDED",
+  "status_reason": "",
+  "spec_sha256": "b55d9d913c7cedb4d463e6e1ddb0187f3df21afe645350c34a03b8de79ef0864",
+  "spec": {
+    "benchmark": "cpu_hash",
+    "revision": "00000000000000000000000000000000000a0002",
+    "command": [
+      "{binary}",
+      "-rounds",
+      "100000"
+    ],
+    "warmups": 5,
+    "repetitions": 30,
+    "timeout_seconds": 600,
+    "requirements": {
+      "allow_emulated": false
+    },
+    "environment": {},
+    "metrics": [
+      {
+        "name": "iteration_latency",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "34137eeae95a4205bd47b944be30ad10dd6abb76109d0b19a5f94d242726a6db"
+    }
+  },
+  "rig": {
+    "rig_id": "rig-00",
+    "hardware_class": "darwin-arm64",
+    "arch": "arm64",
+    "os": "darwin",
+    "kernel": "25.5.0",
+    "cpu_model": "Apple M4",
+    "cpu_cores": 10,
+    "mem_bytes": 17179869184,
+    "gpu_vendor": "",
+    "gpu_model": "",
+    "gpu_memory_bytes": 0,
+    "driver_version": "",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "00000000000000000000000000000000000a0002",
+    "binary_sha256": "34137eeae95a4205bd47b944be30ad10dd6abb76109d0b19a5f94d242726a6db",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 74.599609375,
+      "cpu_util": 0.9722222220990314,
+      "mem_free": 2604662784,
+      "gpu_util": null,
+      "temp_c": 80.74662780761719
+    },
+    "preflight_after": {
+      "load1": 72.70947265625,
+      "cpu_util": 1,
+      "mem_free": 2668609536,
+      "gpu_util": null,
+      "temp_c": 81.94601440429688
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-07T18:11:30.313754000Z",
+    "started": "2026-10-07T18:11:30.326050000Z",
+    "finished": "2026-10-07T18:11:35.496433000Z"
+  },
+  "summary": {
+    "iteration_latency": {
+      "unit": "ns",
+      "n": 30,
+      "mean": 90881679.2,
+      "median": 84092500,
+      "p90": 130130658.60000002,
+      "p95": 157101141.70000002,
+      "p99": 183354136.82000002,
+      "stddev": 33996777.42039104,
+      "mad": 20693271,
+      "cv": 0.3740773467177644
+    }
+  }
+}

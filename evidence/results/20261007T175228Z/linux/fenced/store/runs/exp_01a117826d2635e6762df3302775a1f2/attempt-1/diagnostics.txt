@@ -1,0 +1,8 @@
+iteration: 2
+command: /work/rig-00/blobs/b5e8b932cedf447dafb91c6d53e8c9ebccfa07b04fed951d527c80987cc2739b -rounds 2000 -sleep 200ms
+pid: 560
+exit_code: -1
+signal: terminated
+cancelled: true
+wall_ns: 9632250
+stderr (first 16 KiB):
