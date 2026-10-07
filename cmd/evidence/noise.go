@@ -62,8 +62,11 @@ func (h *harness) noise(ctx context.Context) error {
 				Metrics: []spec.Metric{{Name: "iteration_latency", Unit: "ns", Direction: "lower_is_better"}},
 			}
 			if cond.gated {
-				limit := 0.3
-				s.Environment = spec.Environment{MaxCPUUtil: &limit, GateEachIteration: true, PreflightTimeoutSeconds: 20}
+				// This host idles at roughly a fifth of its CPU busy with other
+				// software, so the limit sits above that rather than at an ideal
+				// nobody's laptop meets.
+				limit := 0.4
+				s.Environment = spec.Environment{MaxCPUUtil: &limit, GateDuringMeasurement: true, PreflightTimeoutSeconds: 20}
 			}
 			id, err := c.submitOnce(s, fmt.Sprintf("noise-%s-%d", cond.name, i))
 			if err != nil {

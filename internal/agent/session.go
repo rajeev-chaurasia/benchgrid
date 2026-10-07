@@ -159,19 +159,20 @@ func (a *Agent) execute(s *session) outcome {
 	}
 	total := sp.Warmups + sp.Repetitions
 	var first int64 = -1
+	var (
+		measuredStart time.Time
+		busyStart     float64
+		haveBusy      bool
+		ownNS         int64
+	)
 	for i := 0; i < total; i++ {
 		if ctx.Err() != nil {
 			return fail(artifact.Failed, cancelReason(ctx))
 		}
-		if i > 0 && sp.Environment.GateEachIteration {
-			if _, field, ok := a.waitForGate(ctx, sp.Environment); !ok {
-				if ctx.Err() != nil {
-					return fail(artifact.Failed, cancelReason(ctx))
-				}
-				return fail(artifact.Invalid, "during:"+field)
-			}
+		if i == sp.Warmups {
+			measuredStart = time.Now()
+			busyStart, haveBusy = probe.BusyCPUSeconds(ctx)
 		}
-		busyBefore, haveBusy := probe.BusyCPUSeconds(ctx)
 		r, err := runIteration(ctx, argv, a.clock, func(pid int) {
 			s.mu.Lock()
 			s.pgid = pid
@@ -199,15 +200,8 @@ func (a *Agent) execute(s *session) outcome {
 		if r.ExitCode != 0 {
 			return fail(artifact.Failed, "exit:"+strconv.Itoa(r.ExitCode))
 		}
-		if limit := sp.Environment.MaxCPUUtil; limit != nil && sp.Environment.GateEachIteration {
-			busyAfter, ok := probe.BusyCPUSeconds(ctx)
-			if !haveBusy || !ok {
-				return fail(artifact.Invalid, "during:cpu_util_unreadable")
-			}
-			if bg := BackgroundUtil(busyAfter-busyBefore, r.UserNS+r.SysNS, r.WallNS, runtime.NumCPU()); bg > *limit {
-				a.log.Info("iteration measured under background load", "experiment", s.d.ExperimentID, "iteration", i, "background_util", bg)
-				return fail(artifact.Invalid, "during:cpu_util")
-			}
+		if i >= sp.Warmups {
+			ownNS += r.UserNS + r.SysNS
 		}
 		values := map[string]float64{
 			"iteration_latency": float64(r.WallNS),
@@ -240,6 +234,17 @@ func (a *Agent) execute(s *session) outcome {
 		}
 	}
 	out.after = a.cfg.Prober.Read(context.Background())
+	if limit := sp.Environment.MaxCPUUtil; limit != nil && sp.Environment.GateDuringMeasurement {
+		busyEnd, ok := probe.BusyCPUSeconds(context.Background())
+		if !haveBusy || !ok {
+			return fail(artifact.Invalid, "during:cpu_util_unreadable")
+		}
+		bg := BackgroundUtil(busyEnd-busyStart, ownNS, time.Since(measuredStart).Nanoseconds(), runtime.NumCPU())
+		a.log.Info("background load during measurement", "experiment", s.d.ExperimentID, "background_util", bg)
+		if bg > *limit {
+			return fail(artifact.Invalid, "during:cpu_util")
+		}
+	}
 	return fail(artifact.Succeeded, "")
 }
 

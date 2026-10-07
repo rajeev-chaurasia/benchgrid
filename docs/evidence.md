@@ -81,15 +81,22 @@ id in the summary rather than counted only.
 
 One agent, one replica, a fixed SHA-256 benchmark of about 40 ms, five warmups
 and thirty measured repetitions per run, twelve runs per condition, one run at
-a time:
+a time, in four conditions:
 
-- `quiet`: nothing else running.
+- `quiet`: no injected load. Not idle: the development host keeps roughly a
+  fifth of its CPU busy with other software, measured at about 2.1 busy
+  core-seconds per second on ten cores, and that stays in every condition.
 - `loaded_ungated`: a seeded noise source spins every core in bursts of 0.3 to
   1.5 s separated by idle gaps of the same range.
-- `loaded_gated`: the same noise, with `max_cpu_util` 0.3 and
-  `gate_each_iteration`, so the agent waits for the machine to be quiet
-  before each iteration, and declares the run `INVALID` if it does not become
-  quiet within 20 s.
+- `quiet_gated`: no injected load, with the gate on, which measures how
+  often the gate rejects a machine with nothing wrong with it.
+- `loaded_gated`: the same noise as `loaded_ungated`, with `max_cpu_util` 0.4
+  and `gate_during_measurement`, so the agent measures the background load
+  across the measured iterations, less the benchmark's own CPU time, and
+  declares the run `INVALID` if it exceeded the limit.
+
+Each run gets exactly one attempt, so an `INVALID` verdict is not retried into
+a second sample of the same noise.
 
 Published: every run artifact, and per condition the number of runs that
 succeeded and that were declared invalid, and the median and maximum CV of
