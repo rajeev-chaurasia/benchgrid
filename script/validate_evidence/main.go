@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/rajeev-chaurasia/benchgrid/internal/agent"
 	"github.com/rajeev-chaurasia/benchgrid/internal/artifact"
@@ -99,7 +100,10 @@ func (c *check) run() {
 		c.leaseRace()
 	}
 	if c.exists("fence") {
-		c.fence()
+		c.fence("fence")
+	}
+	if c.exists("linux") {
+		c.fence("linux")
 	}
 	if c.exists("chaos") {
 		c.chaos()
@@ -143,13 +147,13 @@ func (c *check) leaseRace() {
 	}
 }
 
-func (c *check) fence() {
+func (c *check) fence(run string) {
 	var published []evidence.FenceSummary
-	if !c.must(evidence.ReadJSON(filepath.Join(c.dir, "fence", "summary.json"), &published)) {
+	if !c.must(evidence.ReadJSON(filepath.Join(c.dir, run, "summary.json"), &published)) {
 		return
 	}
 	for _, p := range published {
-		dir := filepath.Join(c.dir, "fence", p.Mode)
+		dir := filepath.Join(c.dir, run, p.Mode)
 		intervals, err := evidence.ReadJSONLGz[agent.Interval](filepath.Join(dir, "intervals.jsonl.gz"))
 		if !c.must(err) {
 			continue
@@ -160,21 +164,21 @@ func (c *check) fence() {
 		}
 		base := evidence.FenceSummary{Mode: p.Mode, Replicas: p.Replicas, Rigs: p.Rigs, Experiments: p.Experiments, States: p.States}
 		r := evidence.SummarizeFence(base, intervals, freezes)
-		c.same("fence "+p.Mode, p, r)
+		c.same(run+" "+p.Mode, p, r)
 		if p.States["QUEUED"]+p.States["RUNNING"] > 0 {
-			c.fail("fence %s: experiments left open", p.Mode)
+			c.fail("%s %s: experiments left open", run, p.Mode)
 		}
 		switch p.Mode {
 		case "fenced":
 			if r.ProcessOverlaps != 0 || r.SessionOverlaps != 0 {
-				c.fail("CLAIM: fenced rigs ran overlapping work: %d process pairs, %d session pairs", r.ProcessOverlaps, r.SessionOverlaps)
+				c.fail("CLAIM: %s fenced rigs ran overlapping work: %d process pairs, %d session pairs", run, r.ProcessOverlaps, r.SessionOverlaps)
 			}
 			if r.StaleRefused == 0 {
-				c.fail("fence fenced: no stale fence ever reached a rig, so the freezes never landed")
+				c.fail("%s fenced: no stale fence ever reached a rig, so the freezes never landed", run)
 			}
 		case "unfenced":
 			if r.ProcessOverlaps == 0 {
-				c.fail("CONTROL: unfenced rigs never overlapped, so zero above proves nothing")
+				c.fail("CONTROL: %s unfenced rigs never overlapped, so zero above proves nothing", run)
 			}
 		}
 	}
@@ -240,20 +244,43 @@ func (c *check) noise() {
 }
 
 // everyRunVerifies applies the run contract to every sealed attempt published
-// anywhere in the results, not only the ones a summary happened to read.
+// anywhere in the results, not only the ones a summary happened to read. It
+// also checks two things no summary covers: every run under linux/ says it
+// ran on Linux, and every max_rss sample is a plausible number of bytes. The
+// second is how a ru_maxrss read as bytes on Linux, where it is kilobytes,
+// would show: a benchmark using a few kilobytes of memory.
 func (c *check) everyRunVerifies() {
-	n := 0
+	n, linux := 0, 0
 	filepath.WalkDir(c.dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || d.Name() != artifact.ManifestFile {
 			return err
 		}
 		n++
-		if _, _, err := artifact.Verify(filepath.Dir(path)); err != nil {
+		dir := filepath.Dir(path)
+		run, samples, err := artifact.Verify(dir)
+		if err != nil {
 			c.fail("run artifact: %v", err)
+			return nil
+		}
+		rel, _ := filepath.Rel(c.dir, dir)
+		if strings.HasPrefix(rel, "linux"+string(filepath.Separator)) {
+			linux++
+			if run.Rig.OS != "linux" {
+				c.fail("%s: published as a Linux run but its rig says %q", rel, run.Rig.OS)
+			}
+		}
+		for _, s := range samples {
+			if s.Metric == "max_rss" && (s.Value < 1<<20 || s.Value > 1<<32) {
+				c.fail("%s: max_rss %v bytes is not a plausible size for this benchmark", rel, s.Value)
+				break
+			}
 		}
 		return nil
 	})
 	if c.exists("chaos") && n == 0 {
 		c.fail("no run artifacts found under a results directory that has runs")
+	}
+	if c.exists("linux") && linux == 0 {
+		c.fail("a linux run published no run artifacts")
 	}
 }

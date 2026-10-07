@@ -27,7 +27,7 @@ func (h *harness) fence(ctx context.Context) error {
 	dir := filepath.Join(h.out, "fence")
 	var summaries []evidence.FenceSummary
 	for _, mode := range []string{"fenced", "unfenced"} {
-		s, err := h.fenceMode(ctx, dir, mode)
+		s, err := h.fenceMode(ctx, dir, mode, "")
 		if err != nil {
 			return fmt.Errorf("%s: %w", mode, err)
 		}
@@ -36,16 +36,23 @@ func (h *harness) fence(ctx context.Context) error {
 	return evidence.WriteJSON(filepath.Join(dir, "summary.json"), summaries)
 }
 
-func (h *harness) fenceMode(ctx context.Context, dir, mode string) (evidence.FenceSummary, error) {
+// fenceMode runs one mode of the fence experiment. With a linux image, every
+// agent is a Linux container and every experiment requires a Linux rig.
+func (h *harness) fenceMode(ctx context.Context, dir, mode, linuxImage string) (evidence.FenceSummary, error) {
 	out := filepath.Join(dir, mode)
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return evidence.FenceSummary{}, err
 	}
-	c, err := h.newCluster(ctx, "fence_"+mode, clusterConfig{
-		replicas: fenceReplicas,
+	name, rigs := "fence_"+mode, fenceRigs
+	if linuxImage != "" {
+		name, rigs = "linux_"+mode, linuxRigs
+	}
+	c, err := h.newCluster(ctx, name, clusterConfig{
+		linuxImage: linuxImage,
+		replicas:   fenceReplicas,
 		serverArgs: []string{"-lease-ttl", fenceTTL.String(), "-tick", "100ms",
 			"-fault-freeze-before-dispatch", fenceFreezeProb},
-		rigs: fenceRigs,
+		rigs: rigs,
 		agentArgs: func(int) []string {
 			if mode == "unfenced" {
 				return []string{"-unfenced-negative-control"}
@@ -76,7 +83,10 @@ func (h *harness) fenceMode(ctx context.Context, dir, mode string) (evidence.Fen
 	for i := 0; i < fenceExperiments; i++ {
 		s := benchSpec(fmt.Sprintf("%040x", i), "-rounds", "2000", "-sleep", "200ms")
 		s.Requirements.AllowEmulated = true
-		if _, err := c.submit(s, fmt.Sprintf("fence-%s-%d", mode, i)); err != nil {
+		if linuxImage != "" {
+			s.Requirements.OS = "linux"
+		}
+		if _, err := c.submit(s, fmt.Sprintf("%s-%d", name, i)); err != nil {
 			close(stop)
 			return evidence.FenceSummary{}, err
 		}
@@ -85,7 +95,7 @@ func (h *harness) fenceMode(ctx context.Context, dir, mode string) (evidence.Fen
 	close(stop)
 	wg.Wait()
 
-	base := evidence.FenceSummary{Mode: mode, Replicas: fenceReplicas, Rigs: fenceRigs, States: map[string]int{}}
+	base := evidence.FenceSummary{Mode: mode, Replicas: fenceReplicas, Rigs: rigs, States: map[string]int{}}
 	rows, err := c.db.Query(ctx, `SELECT state, count(*) FROM experiments GROUP BY state`)
 	if err != nil {
 		return base, err
@@ -111,6 +121,14 @@ func (h *harness) fenceMode(ctx context.Context, dir, mode string) (evidence.Fen
 	}
 	if err := evidence.WriteJSONLGz(filepath.Join(out, "freezes.jsonl.gz"), freezes); err != nil {
 		return base, err
+	}
+	if linuxImage != "" {
+		// The Linux runs publish their run artifacts too, so the validator can
+		// check from the runs themselves that they ran on Linux and that the
+		// memory figures are in bytes.
+		if err := copyDir(filepath.Join(c.store, "runs"), filepath.Join(out, "store", "runs")); err != nil {
+			return base, err
+		}
 	}
 	s := evidence.SummarizeFence(base, intervals, freezes)
 	return s, evidence.WriteJSON(filepath.Join(out, "summary.json"), s)

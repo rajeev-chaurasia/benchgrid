@@ -31,7 +31,7 @@ func main() {
 		return
 	}
 	out := flag.String("out", "evidence/results", "parent directory for this run's results")
-	runs := flag.String("runs", "lease,fence,chaos,noise", "which runs to perform")
+	runs := flag.String("runs", "lease,fence,linux,chaos,noise", "which runs to perform")
 	bin := flag.String("bin", "bin", "directory holding built binaries")
 	pg := flag.String("pg", "postgres:///postgres?sslmode=disable", "Postgres maintenance URL; each run creates its own database")
 	scratch := flag.String("scratch", "", "where agents keep state; defaults to a temp dir")
@@ -62,6 +62,8 @@ func main() {
 			err = h.leaseRace(ctx)
 		case "fence":
 			err = h.fence(ctx)
+		case "linux":
+			err = h.linux(ctx)
 		case "chaos":
 			err = h.chaos(ctx)
 		case "noise":
