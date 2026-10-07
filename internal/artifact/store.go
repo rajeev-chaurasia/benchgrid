@@ -27,6 +27,17 @@ var (
 	digestHex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
+// Store is where sealed runs and benchmark binaries live. The filesystem
+// store serves a single machine and the tests; the GCS store serves a fleet.
+// Both keep the one property the contract depends on: a manifest becomes
+// visible only after every file it lists is in place and matches.
+type Store interface {
+	PutFile(runID string, attempt int, name, digest string, body io.Reader) error
+	Seal(runID string, attempt int, manifest []byte) error
+	PutBlob(body io.Reader) (string, error)
+	OpenBlob(digest string) (io.ReadCloser, error)
+}
+
 // FSStore is a directory standing in for an object store bucket. It keeps the
 // one property the contract depends on: the manifest becomes visible
 // atomically and only after every file it lists is in place.
@@ -140,11 +151,9 @@ func (s *FSStore) PutBlob(body io.Reader) (string, error) {
 	return digest, writeAtomic(dir, digest, b)
 }
 
-func (s *FSStore) BlobPath(digest string) (string, error) {
+func (s *FSStore) OpenBlob(digest string) (io.ReadCloser, error) {
 	if !digestHex.MatchString(digest) {
-		return "", fmt.Errorf("artifact: bad digest")
+		return nil, fmt.Errorf("artifact: bad digest")
 	}
-	p := filepath.Join(s.Root, "blobs", digest)
-	_, err := os.Stat(p)
-	return p, err
+	return os.Open(filepath.Join(s.Root, "blobs", digest))
 }

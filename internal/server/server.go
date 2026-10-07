@@ -37,7 +37,7 @@ import (
 
 type Server struct {
 	DB       *pgxpool.Pool
-	Store    *artifact.FSStore
+	Store    artifact.Store
 	LeaseTTL time.Duration
 	Log      *slog.Logger
 	Registry *prometheus.Registry
@@ -342,12 +342,14 @@ func (s *Server) putBlob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getBlob(w http.ResponseWriter, r *http.Request) {
-	p, err := s.Store.BlobPath(r.PathValue("digest"))
+	rc, err := s.Store.OpenBlob(r.PathValue("digest"))
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	http.ServeFile(w, r, p)
+	defer rc.Close()
+	w.Header().Set("Content-Type", "application/octet-stream")
+	io.Copy(w, rc)
 }
 
 func attemptFromPath(r *http.Request) (string, int, bool) {

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 func main() {
 	listen := flag.String("listen", ":8080", "address to serve the API on")
 	db := flag.String("db", envOr("BENCHGRID_DATABASE_URL", "postgres:///benchgrid?sslmode=disable"), "Postgres URL")
-	artifacts := flag.String("artifacts", "var/store", "artifact store root")
+	artifacts := flag.String("artifacts", "var/store", "artifact store: a directory, or gs://bucket/prefix")
 	id := flag.String("id", hostname(), "scheduler instance id, recorded on every attempt it places")
 	ttl := flag.Duration("lease-ttl", 5*time.Second, "lease TTL; agents renew through heartbeats")
 	tick := flag.Duration("tick", 200*time.Millisecond, "scheduling interval")
@@ -57,7 +58,16 @@ func main() {
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	srv := &server.Server{DB: pool, Store: &artifact.FSStore{Root: *artifacts}, LeaseTTL: *ttl, Log: log, Registry: reg, FaultArtifactErrorRate: *artifactFaults}
+	var store artifact.Store = &artifact.FSStore{Root: *artifacts}
+	if strings.HasPrefix(*artifacts, "gs://") {
+		gcs, err := artifact.NewGCSStore(ctx, *artifacts)
+		if err != nil {
+			log.Error("artifact store", "err", err)
+			os.Exit(1)
+		}
+		store = gcs
+	}
+	srv := &server.Server{DB: pool, Store: store, LeaseTTL: *ttl, Log: log, Registry: reg, FaultArtifactErrorRate: *artifactFaults}
 	httpSrv := &http.Server{Addr: *listen, Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
 
 	if !*noSched {
