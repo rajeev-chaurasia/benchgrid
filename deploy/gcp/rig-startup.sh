@@ -37,7 +37,15 @@ if ! grep -q "^server metadata.google.internal" "$conf"; then
 fi
 systemctl enable chrony 2>/dev/null || systemctl enable chronyd 2>/dev/null || true
 systemctl restart chrony 2>/dev/null || systemctl restart chronyd 2>/dev/null || true
-for _ in $(seq 1 30); do chronyc -c tracking 2>/dev/null | grep -q metadata && break; chronyc waitsync 1 0.01 >/dev/null 2>&1 && break; sleep 2; done
+# The agent must not start, and so must not advertise the rig, until the
+# clock is trustworthy by chrony's own full error bound: |offset| plus half
+# the root delay plus the root dispersion, under 5 ms. A fresh node that
+# joined before this check once advertised itself with a 62 second bound.
+for _ in $(seq 1 120); do
+  bound=$(chronyc -c tracking 2>/dev/null | awk -F, '{o=$5; if (o < 0) o = -o; printf "%d", (o + $11 / 2 + $12) * 1000000}')
+  [ -n "$bound" ] && [ "$bound" -lt 5000 ] && break
+  sleep 5
+done
 
 if [ "$TUNED" = "true" ]; then
   echo never > /sys/kernel/mm/transparent_hugepage/enabled
