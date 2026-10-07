@@ -1,0 +1,127 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a11483588537712680267e08b122dd",
+  "attempt": 1,
+  "fence": 6,
+  "status": "SUCCEEDED",
+  "status_reason": "",
+  "spec_sha256": "4a923e9747c8adb8297bea0d8c6557af5128583f1a99942ba9bd043a12372246",
+  "spec": {
+    "benchmark": "cpu_hash",
+    "revision": "000000000000000000000000000000000000001b",
+    "command": [
+      "{binary}",
+      "-rounds",
+      "2000",
+      "-sleep",
+      "200ms"
+    ],
+    "warmups": 1,
+    "repetitions": 2,
+    "timeout_seconds": 60,
+    "requirements": {
+      "os": "linux",
+      "allow_emulated": true
+    },
+    "environment": {},
+    "metrics": [
+      {
+        "name": "iteration_latency",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "max_rss",
+        "unit": "bytes",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "throughput",
+        "unit": "ops_per_s",
+        "direction": "higher_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "db44e088b05750208c71e6750f50ff7bf116b6059a7869bd5536e2e556e931bd"
+    }
+  },
+  "rig": {
+    "rig_id": "rig-05",
+    "hardware_class": "linux-arm64",
+    "arch": "arm64",
+    "os": "linux",
+    "kernel": "6.10.14-linuxkit",
+    "cpu_model": "Apple  0x000",
+    "cpu_cores": 10,
+    "mem_bytes": 8218034176,
+    "gpu_vendor": "",
+    "gpu_model": "",
+    "gpu_memory_bytes": 0,
+    "driver_version": "",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "000000000000000000000000000000000000001b",
+    "binary_sha256": "db44e088b05750208c71e6750f50ff7bf116b6059a7869bd5536e2e556e931bd",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 1.62,
+      "cpu_util": 0.016000000317580997,
+      "mem_free": 6097199104,
+      "gpu_util": null,
+      "temp_c": null
+    },
+    "preflight_after": {
+      "load1": 1.62,
+      "cpu_util": 0.015999999642372132,
+      "mem_free": 6118916096,
+      "gpu_util": null,
+      "temp_c": null
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-07T03:58:46.524745000Z",
+    "started": "2026-10-07T03:58:46.528416878Z",
+    "finished": "2026-10-07T03:58:47.698178629Z"
+  },
+  "summary": {
+    "iteration_latency": {
+      "unit": "ns",
+      "n": 2,
+      "mean": 215775958.5,
+      "median": 215775958.5,
+      "p90": 219274958.9,
+      "p95": 219712333.95,
+      "p99": 220062233.99,
+      "stddev": 6185417.275536106,
+      "mad": 4373750.5,
+      "cv": 0.02866592422313863
+    },
+    "max_rss": {
+      "unit": "bytes",
+      "n": 2,
+      "mean": 25522176,
+      "median": 25522176,
+      "p90": 25522176,
+      "p95": 25522176,
+      "p99": 25522176,
+      "stddev": 0,
+      "mad": 0,
+      "cv": 0
+    },
+    "throughput": {
+      "unit": "ops_per_s",
+      "n": 2,
+      "mean": 2045645.4065,
+      "median": 2045645.4065,
+      "p90": 2397838.1853,
+      "p95": 2441862.28265,
+      "p99": 2477081.56053,
+      "stddev": 622594.7554360343,
+      "mad": 440240.97349999996,
+      "cv": 0.3043512592445157
+    }
+  }
+}

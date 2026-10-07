@@ -1,0 +1,24 @@
+[
+  {
+    "mode": "conditional",
+    "rigs": 20,
+    "workers": 64,
+    "attempts": 50000,
+    "grants": 2097,
+    "ended_by_expiry": 236,
+    "double_bookings": 0,
+    "peak_in_flight": 64,
+    "errors": 0
+  },
+  {
+    "mode": "naive",
+    "rigs": 20,
+    "workers": 64,
+    "attempts": 50000,
+    "grants": 6206,
+    "ended_by_expiry": 4415,
+    "double_bookings": 46637,
+    "peak_in_flight": 64,
+    "errors": 0
+  }
+]

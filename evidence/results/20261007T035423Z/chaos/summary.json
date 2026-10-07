@@ -1,0 +1,33 @@
+{
+  "replicas": 3,
+  "rigs": 8,
+  "experiments": 600,
+  "by_kind": {
+    "crash": 24,
+    "exit": 24,
+    "normal": 552
+  },
+  "faults": {
+    "agent_kill": 51,
+    "control_plane_outage": 7,
+    "replica_freeze": 27,
+    "replica_kill": 14
+  },
+  "as_expected": 600,
+  "misses": [],
+  "attempts_histogram": {
+    "1": 558,
+    "2": 39,
+    "3": 2,
+    "4": 1
+  },
+  "final_attempts_sealed_and_verified": 600,
+  "artifact_errors": [],
+  "placement_violations": 0,
+  "stale_refused": 0,
+  "process_overlaps": 0,
+  "session_overlaps": 0,
+  "process_intervals": 1794,
+  "rigs_still_leased_at_end": 0,
+  "quarantined_rigs": []
+}

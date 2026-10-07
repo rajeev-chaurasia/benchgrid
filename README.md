@@ -21,6 +21,8 @@ it can be placed on one.
 ## The measured result
 
 <!-- evidence:source -->
+From `evidence/results/20261007T035423Z/`, at commit `c27816b`, on Postgres 14.18 (Homebrew) and an
+Apple M4 whose own background load kept 33% of its CPU busy before any run started.
 <!-- /evidence:source -->
 Every number below is rendered from those files by
 `go run ./script/readme_numbers`, and recomputed from the raw data by
@@ -31,6 +33,13 @@ failing.
 
 **The lease.**
 <!-- evidence:lease -->
+64 workers, 20 rigs, 50,000 acquisition attempts per mode, TTLs of 5 to 20 ms,
+one grant in ten left to expire.
+
+| acquire | grants | double bookings | peak attempts in flight |
+| --- | ---: | ---: | ---: |
+| one conditional `UPDATE` (the product) | 2,097 | **0** | 64 |
+| read, then unconditional write (control) | 6,206 | 46,637 | 64 |
 <!-- /evidence:lease -->
 
 **The fence.** Three control plane replicas. Replicas freeze themselves with
@@ -40,6 +49,12 @@ run is done twice: with every agent a process on the host, and with every
 agent a Linux container in Docker's Linux VM on the same laptop.
 
 <!-- evidence:fence -->
+| rigs | agent | experiments | freezes | stale dispatches that reached a rig | refused | overlapping process pairs | overlapping session pairs |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 8 host processes | checks the fence | 300 | 38 | 38 | 38 | **0** | **0** |
+| 8 host processes | does not (control) | 300 | 35 | 37 | 0 | 86 | 57 |
+| 6 Linux containers | checks the fence | 300 | 47 | 46 | 46 | **0** | **0** |
+| 6 Linux containers | does not (control) | 300 | 31 | 37 | 0 | 96 | 45 |
 <!-- /evidence:fence -->
 
 The last two columns are the point. The same harness, the same freezes,
@@ -50,15 +65,45 @@ lifetime of any benchmark an agent's death left running.
 
 **Chaos.**
 <!-- evidence:chaos -->
+3 replicas, 8 rigs in four emulated hardware classes, 600 experiments,
+48 of them built to fail. During the run: 51 agents killed and restarted, 14
+replicas killed and restarted, 27 replicas frozen, 7 outages of the whole
+control plane at once, and one artifact write in five refused. Those random
+faults, with nothing aimed, produced no stale dispatch at all, which is why
+the fence run has to aim its freezes to test the fence.
+
+| | |
+| --- | ---: |
+| experiments ending as they should (sound ones succeed, broken ones fail) | 600 of 600 |
+| final attempts with a sealed artifact that verifies and agrees with the control plane | 600 of 600 |
+| runs placed on a rig their spec did not allow | 0 |
+| overlapping process pairs | 0 |
+| rigs still leased afterwards | 0 |
+| experiments needing more than one attempt | 39 with 2, 2 with 3, 1 with 4 |
 <!-- /evidence:chaos -->
 
 ## A second, weaker claim
 
 <!-- evidence:noise_claim -->
+> With bursty load injected on its host, the measurement gate declined to
+> publish 12 of 12 runs that an ungated agent published with a median
+> coefficient of variation of 16.9%, against 4.3% with no injected load.
 <!-- /evidence:noise_claim -->
 
 It is weaker on purpose, and here is how.
 <!-- evidence:noise -->
+No loaded run got through the gate. The gate also declined 8 of
+12 runs with no injected load, because the host's own background load,
+33% of its CPU before the runs began, crossed the limit during them. A
+gate that refuses that often on an idle machine is not one anybody would
+leave switched on here.
+
+| condition | published | declined | median CV of published | median latency |
+| --- | ---: | ---: | ---: | ---: |
+| no load | 12 | 0 | 4.3% | 42.0 ms |
+| no load, gated | 4 | 8 | 1.2% | 41.1 ms |
+| bursty load | 12 | 0 | 16.9% | 46.1 ms |
+| bursty load, gated | 0 | 12 | n/a | n/a |
 <!-- /evidence:noise -->
 
 On this machine the gate is coarse and conservative, and its numbers are
