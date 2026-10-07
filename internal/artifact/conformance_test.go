@@ -88,6 +88,16 @@ func TestStoresAgree(t *testing.T) {
 				t.Errorf("resealed with a different manifest: %v", err)
 			}
 
+			if rc, err := st.OpenSealed("exp_c", 1, RunFile); err != nil {
+				t.Errorf("sealed file unreadable: %v", err)
+			} else {
+				got, _ := io.ReadAll(rc)
+				rc.Close()
+				if !bytes.Equal(got, rj) {
+					t.Error("sealed file read back differently")
+				}
+			}
+
 			if err := st.PutFile("exp_x", 1, RunFile, digest(rj), bytes.NewReader(rj)); err != nil {
 				t.Fatal(err)
 			}
@@ -99,6 +109,9 @@ func TestStoresAgree(t *testing.T) {
 				t.Error("sealed with an unlisted file beside the listed ones")
 			}
 
+			if _, err := st.OpenSealed("exp_x", 1, RunFile); !errors.Is(err, ErrNotSealed) {
+				t.Errorf("read from an unsealed attempt: %v", err)
+			}
 			if err := st.PutFile("../x", 1, RunFile, digest(rj), bytes.NewReader(rj)); err == nil {
 				t.Error("accepted a path traversal run id")
 			}

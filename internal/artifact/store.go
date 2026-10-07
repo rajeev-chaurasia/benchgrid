@@ -36,7 +36,13 @@ type Store interface {
 	Seal(runID string, attempt int, manifest []byte) error
 	PutBlob(body io.Reader) (string, error)
 	OpenBlob(digest string) (io.ReadCloser, error)
+	// OpenSealed reads one file of a sealed attempt. An attempt without a
+	// manifest is not a run, so nothing in it is readable.
+	OpenSealed(runID string, attempt int, name string) (io.ReadCloser, error)
 }
+
+// ErrNotSealed is returned for a read from an attempt that has no manifest.
+var ErrNotSealed = errors.New("artifact: attempt is not sealed")
 
 // FSStore is a directory standing in for an object store bucket. It keeps the
 // one property the contract depends on: the manifest becomes visible
@@ -156,4 +162,15 @@ func (s *FSStore) OpenBlob(digest string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("artifact: bad digest")
 	}
 	return os.Open(filepath.Join(s.Root, "blobs", digest))
+}
+
+func (s *FSStore) OpenSealed(runID string, attempt int, name string) (io.ReadCloser, error) {
+	dir, err := s.dir(runID, attempt)
+	if err != nil || !safeName.MatchString(name) {
+		return nil, fmt.Errorf("artifact: bad run %q attempt %d file %q", runID, attempt, name)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ManifestFile)); err != nil {
+		return nil, ErrNotSealed
+	}
+	return os.Open(filepath.Join(dir, name))
 }

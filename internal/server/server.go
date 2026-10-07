@@ -106,6 +106,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/blobs/{digest}", s.getBlob)
 	mux.HandleFunc("PUT /v1/artifacts/runs/{run}/{attempt}/{file}", s.putArtifact)
 	mux.HandleFunc("POST /v1/artifacts/runs/{run}/{attempt}/seal", s.seal)
+	mux.HandleFunc("GET /v1/artifacts/runs/{run}/{attempt}/{file}", s.getArtifact)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.DB.Ping(r.Context()); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
@@ -383,6 +384,21 @@ func (s *Server) putArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 	err := s.Store.PutFile(run, attempt, r.PathValue("file"), r.Header.Get(wire.SHA256Header), r.Body)
 	writeStoreErr(w, err)
+}
+
+func (s *Server) getArtifact(w http.ResponseWriter, r *http.Request) {
+	run, attempt, ok := attemptFromPath(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	rc, err := s.Store.OpenSealed(run, attempt, r.PathValue("file"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer rc.Close()
+	io.Copy(w, rc)
 }
 
 func (s *Server) seal(w http.ResponseWriter, r *http.Request) {

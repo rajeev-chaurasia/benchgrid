@@ -201,3 +201,15 @@ func (s *GCSStore) OpenBlob(digest string) (io.ReadCloser, error) {
 	}
 	return s.Bucket.Object(s.key("blobs", digest)).NewReader(context.Background())
 }
+
+func (s *GCSStore) OpenSealed(runID string, attempt int, name string) (io.ReadCloser, error) {
+	key, err := s.attemptKey(runID, attempt, name)
+	if err != nil {
+		return nil, err
+	}
+	ctx := context.Background()
+	if _, err := s.Bucket.Object(path.Join(path.Dir(key), ManifestFile)).Attrs(ctx); err != nil {
+		return nil, ErrNotSealed
+	}
+	return s.Bucket.Object(key).NewReader(ctx)
+}
