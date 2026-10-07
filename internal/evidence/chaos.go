@@ -165,12 +165,12 @@ func finalArtifact(e ChaosExperiment) (status string, required bool) {
 }
 
 // Placed reports whether a run's rig satisfied its spec, judged from the run
-// alone. Tags and profilers are scheduling inputs the run does not record, so
-// they are checked through the hardware class they come with.
+// alone. Tags, profilers and GPU count are scheduling inputs the run does not
+// record, so they are checked through the hardware class they come with.
 func Placed(run artifact.Run) bool {
 	r := run.Rig
 	req := run.Spec.Requirements
-	req.Tags, req.Profilers = nil, nil
+	req.Tags, req.Profilers, req.MinGPUCount = nil, nil, 0
 	rig := capability.Rig{
 		RigID: r.RigID, HardwareClass: r.HardwareClass, Arch: r.Arch, OS: r.OS,
 		CPUCores: r.CPUCores, MemBytes: r.MemBytes, GPUVendor: r.GPUVendor,

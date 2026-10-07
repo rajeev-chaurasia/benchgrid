@@ -48,3 +48,12 @@ func TestGovernorBestEffortDoesNotFilter(t *testing.T) {
 		t.Errorf("best effort governor filtered a rig: %v", why)
 	}
 }
+
+func TestMatchOSAndGPUCount(t *testing.T) {
+	r := gpuRig
+	r.OS, r.GPUCount = "linux", 1
+	why := Match(spec.Requirements{OS: "darwin", MinGPUCount: 2}, spec.Environment{}, r)
+	if len(why) != 2 {
+		t.Errorf("%v", why)
+	}
+}

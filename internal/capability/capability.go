@@ -22,6 +22,7 @@ type Rig struct {
 	GPUVendor      string   `json:"gpu_vendor"`
 	GPUModel       string   `json:"gpu_model"`
 	GPUMemoryBytes int64    `json:"gpu_memory_bytes"`
+	GPUCount       int      `json:"gpu_count"`
 	DriverVersion  string   `json:"driver_version"`
 	Firmware       string   `json:"firmware"`
 	Profilers      []string `json:"profilers"`
@@ -42,6 +43,9 @@ func Match(req spec.Requirements, env spec.Environment, r Rig) []string {
 	if r.Emulated && !req.AllowEmulated {
 		miss("rig is emulated and the spec does not allow emulated rigs")
 	}
+	if req.OS != "" && req.OS != r.OS {
+		miss("os %s, need %s", r.OS, req.OS)
+	}
 	if req.Arch != "" && req.Arch != r.Arch {
 		miss("arch %s, need %s", r.Arch, req.Arch)
 	}
@@ -50,6 +54,9 @@ func Match(req spec.Requirements, env spec.Environment, r Rig) []string {
 	}
 	if req.GPUVendor != "" && req.GPUVendor != r.GPUVendor {
 		miss("gpu_vendor %q, need %s", r.GPUVendor, req.GPUVendor)
+	}
+	if req.MinGPUCount > r.GPUCount {
+		miss("gpu count %d, need %d", r.GPUCount, req.MinGPUCount)
 	}
 	if req.MinGPUMemoryBytes > r.GPUMemoryBytes {
 		miss("gpu memory %d, need %d", r.GPUMemoryBytes, req.MinGPUMemoryBytes)

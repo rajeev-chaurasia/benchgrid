@@ -50,3 +50,11 @@ func TestNoProfileIsNotEmulated(t *testing.T) {
 		t.Errorf("%+v", r)
 	}
 }
+
+func TestParseNvidiaEveryDevice(t *testing.T) {
+	out := "NVIDIA RTX A5000, 550.54.14, 3, 41, 24564\nNVIDIA RTX A4000, 550.54.14, 88, 77, 16376\n"
+	g, ok := parseNvidia(out)
+	if !ok || g.Count != 2 || g.Name != "NVIDIA RTX A5000" || g.Util != 0.88 || g.TempC != 77 || g.MemoryTotalBytes != 16376<<20 {
+		t.Errorf("%+v", g)
+	}
+}

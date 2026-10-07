@@ -26,10 +26,12 @@ type Spec struct {
 }
 
 type Requirements struct {
+	OS                string   `json:"os,omitempty"`
 	Arch              string   `json:"arch,omitempty"`
 	HardwareClass     string   `json:"hardware_class,omitempty"`
 	GPUVendor         string   `json:"gpu_vendor,omitempty"`
 	MinGPUMemoryBytes int64    `json:"min_gpu_memory_bytes,omitempty"`
+	MinGPUCount       int      `json:"min_gpu_count,omitempty"`
 	Driver            string   `json:"driver,omitempty"`
 	MinCPUCores       int      `json:"min_cpu_cores,omitempty"`
 	MinMemBytes       int64    `json:"min_mem_bytes,omitempty"`

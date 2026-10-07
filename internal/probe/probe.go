@@ -40,6 +40,7 @@ type Profile struct {
 	GPUVendor      string   `json:"gpu_vendor,omitempty"`
 	GPUModel       string   `json:"gpu_model,omitempty"`
 	GPUMemoryBytes int64    `json:"gpu_memory_bytes,omitempty"`
+	GPUCount       int      `json:"gpu_count,omitempty"`
 	DriverVersion  string   `json:"driver_version,omitempty"`
 	Firmware       string   `json:"firmware,omitempty"`
 	Tags           []string `json:"tags,omitempty"`
@@ -92,7 +93,7 @@ func (p *Prober) Describe(ctx context.Context, rigID string) capability.Rig {
 	}
 	if g, ok := queryNvidia(ctx); ok {
 		r.GPUVendor, r.GPUModel, r.DriverVersion = "nvidia", g.Name, g.Driver
-		r.GPUMemoryBytes = g.MemoryTotalBytes
+		r.GPUMemoryBytes, r.GPUCount = g.MemoryTotalBytes, g.Count
 	}
 	r.Governors = availableGovernors()
 
@@ -110,6 +111,11 @@ func (p *Prober) Describe(ctx context.Context, rigID string) capability.Rig {
 		set(&r.Firmware, pr.Firmware)
 		if pr.GPUMemoryBytes > 0 {
 			r.GPUMemoryBytes = pr.GPUMemoryBytes
+		}
+		if pr.GPUCount > 0 {
+			r.GPUCount = pr.GPUCount
+		} else if pr.GPUVendor != "" && r.GPUCount == 0 {
+			r.GPUCount = 1
 		}
 		if pr.Tags != nil {
 			r.Tags = pr.Tags
