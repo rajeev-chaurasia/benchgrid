@@ -101,10 +101,13 @@ func (s *session) statusReason() string { s.mu.Lock(); defer s.mu.Unlock(); retu
 // does not need to know which branch produced it.
 type outcome struct {
 	status, reason string
-	samples        []artifact.Sample
-	before, after  probe.Readings
-	governor       string
-	started        time.Time
+	// diagnostics is what a person needs to see why a run did not succeed,
+	// published beside it as diagnostics.txt.
+	diagnostics   string
+	samples       []artifact.Sample
+	before, after probe.Readings
+	governor      string
+	started       time.Time
 }
 
 func (a *Agent) run(s *session) {
@@ -181,6 +184,16 @@ func (a *Agent) execute(s *session) outcome {
 		return fail(artifact.Invalid, "preflight:"+field)
 	}
 
+	// Every attempt runs in a workspace of its own, created empty and removed
+	// afterwards, so nothing one benchmark leaves on disk is there for the
+	// next to read, and the benchmark cannot depend on the agent's own working
+	// directory.
+	workspace := a.workspace(s)
+	os.RemoveAll(workspace)
+	if err := os.MkdirAll(filepath.Join(workspace, "tmp"), 0o755); err != nil {
+		return fail(artifact.Invalid, "preflight:workspace")
+	}
+
 	s.setPhase(PhaseRunning)
 	argv := make([]string, len(sp.Command))
 	for i, x := range sp.Command {
@@ -202,11 +215,15 @@ func (a *Agent) execute(s *session) outcome {
 			measuredStart = time.Now()
 			busyStart, haveBusy = probe.BusyCPUSeconds(ctx)
 		}
-		r, err := runIteration(ctx, argv, a.clock, func() { a.markLaunching(s) }, func(pid int, startNS int64) {
-			s.mu.Lock()
-			s.pgid = pid
-			s.mu.Unlock()
-			a.trackGroup(pid, s, startNS)
+		r, err := runIteration(ctx, iteration{
+			argv: argv, dir: workspace, env: benchmarkEnv(workspace, i, i < sp.Warmups), clock: a.clock,
+			beforeStart: func() { a.markLaunching(s) },
+			onStart: func(pid int, startNS int64) {
+				s.mu.Lock()
+				s.pgid = pid
+				s.mu.Unlock()
+				a.trackGroup(pid, s, startNS)
+			},
 		})
 		if r.PID == 0 {
 			// Nothing started, so there is nothing for the marker to warn about.
@@ -220,6 +237,9 @@ func (a *Agent) execute(s *session) outcome {
 		}
 		if first < 0 {
 			first = r.StartNS
+		}
+		if r.Cancelled || err != nil || r.Signal != "" || r.ExitCode != 0 {
+			out.diagnostics = diagnose(i, argv, r, err)
 		}
 		if r.Cancelled {
 			return fail(artifact.Failed, cancelReason(ctx))
@@ -420,7 +440,40 @@ func (a *Agent) cleanup(s *session) error {
 		}
 		a.untrackGroup(pg)
 	}
-	return os.RemoveAll(filepath.Join(a.cfg.StateDir, "work", s.d.ExperimentID+"-"+strconv.Itoa(s.d.Attempt)))
+	return os.RemoveAll(a.workspace(s))
+}
+
+func (a *Agent) workspace(s *session) string {
+	return filepath.Join(a.cfg.StateDir, "work", s.d.ExperimentID+"-"+strconv.Itoa(s.d.Attempt))
+}
+
+// benchmarkEnv is the whole environment a benchmark sees. It does not inherit
+// the agent's, because a variable set on one rig's agent and not another's is
+// an unrecorded difference between two runs of the same spec.
+func benchmarkEnv(workspace string, iteration int, warmup bool) []string {
+	w := "0"
+	if warmup {
+		w = "1"
+	}
+	return []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + workspace,
+		"TMPDIR=" + filepath.Join(workspace, "tmp"),
+		"LANG=C",
+		"BENCHGRID_ITERATION=" + strconv.Itoa(iteration),
+		"BENCHGRID_WARMUP=" + w,
+	}
+}
+
+func diagnose(i int, argv []string, r IterationResult, err error) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "iteration: %d\ncommand: %s\npid: %d\nexit_code: %d\nsignal: %s\ncancelled: %v\nwall_ns: %d\n",
+		i, strings.Join(argv, " "), r.PID, r.ExitCode, r.Signal, r.Cancelled, r.WallNS)
+	if err != nil {
+		fmt.Fprintf(&b, "error: %v\n", err)
+	}
+	fmt.Fprintf(&b, "stderr (first 16 KiB):\n%s", r.Stderr)
+	return b.String()
 }
 
 // rawBody lets call hand back an undecoded body for the one endpoint that does

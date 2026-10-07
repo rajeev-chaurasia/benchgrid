@@ -41,8 +41,22 @@ var grace = 2 * time.Second
 // spawns workers and is killed by pid alone leaves them running on the rig,
 // which is exactly the contamination the next holder's preflight exists to
 // find.
-func runIteration(ctx context.Context, argv []string, clock func() int64, beforeStart func(), onStart func(pid int, startNS int64)) (IterationResult, error) {
+type iteration struct {
+	argv  []string
+	dir   string
+	env   []string
+	clock func() int64
+	// beforeStart runs before the process exists and onStart as soon as it
+	// does, which is where the agent writes the markers that let a successor
+	// find the process if this agent dies.
+	beforeStart func()
+	onStart     func(pid int, startNS int64)
+}
+
+func runIteration(ctx context.Context, it iteration) (IterationResult, error) {
+	argv, clock, beforeStart, onStart := it.argv, it.clock, it.beforeStart, it.onStart
 	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Dir, cmd.Env = it.dir, it.env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

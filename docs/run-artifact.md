@@ -14,8 +14,14 @@ if they disagree, so the rules for computing them are spelled out exactly.
 <store>/runs/<run_id>/attempt-<attempt>/
     run.json
     samples.jsonl
+    diagnostics.txt     only when status is not SUCCEEDED
     manifest.json
 ```
+
+`diagnostics.txt` is free text for a person: the failing iteration, its
+command, exit code or signal, and the first 16 KiB of its stderr. It is listed
+in the manifest like any other file and carries no field a consumer should
+parse.
 
 `run_id` is the experiment id, so every attempt at one experiment lands under
 one directory. `attempt` is a counter on the experiment row, incremented in the

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -424,6 +425,78 @@ func TestGovernorTheKernelRefusesInvalidatesARequiredRun(t *testing.T) {
 	sp.Environment = spec.Environment{CPUGovernor: "performance", GovernorRequired: true}
 	a.Accept(dispatch("exp_gov2", 1, 1, sp))
 	if st := waitDone(t, a, "exp_gov2", 1); st.Status != artifact.Invalid || st.StatusReason != "preflight:governor" {
+		t.Errorf("%+v", st)
+	}
+}
+
+// A file one attempt leaves behind must not be there for the next: the
+// benchmark creates a file that must not already exist, twice, in two
+// attempts.
+func TestEveryAttemptGetsAnEmptyWorkspace(t *testing.T) {
+	a, _ := newAgent(t, true, &probe.Profile{})
+	for i := 1; i <= 2; i++ {
+		exp := fmt.Sprintf("exp_ws_%d", i)
+		sp := testSpec("-rounds", "10", "-write", "left-behind")
+		sp.Warmups, sp.Repetitions = 0, 1
+		a.Accept(dispatch(exp, 1, int64(i), sp))
+		if st := waitDone(t, a, exp, 1); st.Status != artifact.Succeeded {
+			t.Fatalf("attempt %d saw the previous attempt's file: %+v", i, st)
+		}
+	}
+	entries, _ := os.ReadDir(filepath.Join(a.cfg.StateDir, "work"))
+	if len(entries) != 0 {
+		t.Errorf("workspaces left behind: %d", len(entries))
+	}
+}
+
+func TestFailedRunPublishesDiagnostics(t *testing.T) {
+	a, _ := newAgent(t, true, &probe.Profile{})
+	a.Accept(dispatch("exp_diag", 1, 1, testSpec("-rounds", "10", "-stderr", "segfault in kernel 7", "-exit", "3")))
+	if st := waitDone(t, a, "exp_diag", 1); st.StatusReason != "exit:3" {
+		t.Fatalf("%+v", st)
+	}
+	dir := artifact.AttemptDir(filepath.Join(a.cfg.StateDir, "runs"), "exp_diag", 1)
+	if _, _, err := artifact.Verify(dir); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, artifact.DiagnosticsFile))
+	if err != nil || !strings.Contains(string(b), "segfault in kernel 7") || !strings.Contains(string(b), "exit_code: 3") {
+		t.Errorf("diagnostics missing what failed: %q %v", b, err)
+	}
+	m, _ := os.ReadFile(filepath.Join(dir, artifact.ManifestFile))
+	if !strings.Contains(string(m), artifact.DiagnosticsFile) {
+		t.Error("diagnostics not sealed into the manifest")
+	}
+}
+
+// A workspace the agent cannot remove means the next attempt would start in
+// whatever is left, so the rig leaves service.
+func TestCleanupFailureQuarantines(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root removes read-only directories")
+	}
+	a, _ := newAgent(t, true, &probe.Profile{})
+	sp := testSpec("-rounds", "10", "-lock")
+	sp.Warmups, sp.Repetitions = 0, 1
+	a.Accept(dispatch("exp_lock", 1, 1, sp))
+	st := waitDone(t, a, "exp_lock", 1)
+	t.Cleanup(func() {
+		filepath.Walk(filepath.Join(a.cfg.StateDir, "work"), func(p string, _ os.FileInfo, _ error) error { os.Chmod(p, 0o755); return nil })
+	})
+	if st.Status != artifact.Invalid || st.StatusReason != "cleanup_failed" || !a.quarantined() {
+		t.Errorf("%+v quarantined=%v", st, a.quarantined())
+	}
+}
+
+func TestThermalLimitHoldsThenRejects(t *testing.T) {
+	temp := filepath.Join(t.TempDir(), "temp")
+	os.WriteFile(temp, []byte("96"), 0o644)
+	a, _ := newAgent(t, true, &probe.Profile{TempFile: temp})
+	sp := testSpec("-rounds", "10")
+	limit := 85.0
+	sp.Environment = spec.Environment{MaxTempC: &limit, PreflightTimeoutSeconds: 1}
+	a.Accept(dispatch("exp_hot", 1, 1, sp))
+	if st := waitDone(t, a, "exp_hot", 1); st.Status != artifact.Invalid || st.StatusReason != "preflight:temp_c" {
 		t.Errorf("%+v", st)
 	}
 }

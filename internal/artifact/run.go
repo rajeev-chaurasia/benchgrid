@@ -17,6 +17,8 @@ const (
 	RunFile      = "run.json"
 	SamplesFile  = "samples.jsonl"
 	ManifestFile = "manifest.json"
+	// DiagnosticsFile is present only for runs that did not succeed.
+	DiagnosticsFile = "diagnostics.txt"
 
 	Succeeded = "SUCCEEDED"
 	Failed    = "FAILED"

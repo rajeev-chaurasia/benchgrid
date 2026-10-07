@@ -3,8 +3,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -79,7 +77,11 @@ func (a *Agent) collect(s *session, out outcome) error {
 		return err
 	}
 	dir := artifact.AttemptDir(filepath.Join(a.cfg.StateDir, "runs"), s.d.ExperimentID, s.d.Attempt)
-	if err := artifact.WriteDir(dir, map[string][]byte{artifact.RunFile: rj, artifact.SamplesFile: sj}); err != nil {
+	files := map[string][]byte{artifact.RunFile: rj, artifact.SamplesFile: sj}
+	if out.diagnostics != "" {
+		files[artifact.DiagnosticsFile] = []byte(out.diagnostics)
+	}
+	if err := artifact.WriteDir(dir, files); err != nil {
 		return err
 	}
 	p := pending{ExperimentID: s.d.ExperimentID, Attempt: s.d.Attempt, Fence: s.fence,
@@ -146,23 +148,28 @@ func (a *Agent) flush(ctx context.Context, p pending) bool {
 	return true
 }
 
+// upload sends every file the local manifest lists, then the manifest, so
+// the manifest stays the single statement of what an attempt contains.
 func (a *Agent) upload(ctx context.Context, p pending) error {
 	base := fmt.Sprintf("/v1/artifacts/runs/%s/attempt-%d", p.ExperimentID, p.Attempt)
-	for _, name := range []string{artifact.RunFile, artifact.SamplesFile} {
-		b, err := os.ReadFile(filepath.Join(p.Dir, name))
-		if err != nil {
-			return err
-		}
-		sum := sha256.Sum256(b)
-		h := http.Header{}
-		h.Set(wire.SHA256Header, hex.EncodeToString(sum[:]))
-		if err := a.call(ctx, http.MethodPut, base+"/"+name, b, h, nil); err != nil {
-			return err
-		}
-	}
 	manifest, err := os.ReadFile(filepath.Join(p.Dir, artifact.ManifestFile))
 	if err != nil {
 		return err
+	}
+	var m artifact.Manifest
+	if err := json.Unmarshal(manifest, &m); err != nil {
+		return err
+	}
+	for _, f := range m.Files {
+		b, err := os.ReadFile(filepath.Join(p.Dir, f.Path))
+		if err != nil {
+			return err
+		}
+		h := http.Header{}
+		h.Set(wire.SHA256Header, f.SHA256)
+		if err := a.call(ctx, http.MethodPut, base+"/"+f.Path, b, h, nil); err != nil {
+			return err
+		}
 	}
 	return a.call(ctx, http.MethodPost, base+"/seal", manifest, nil, nil)
 }

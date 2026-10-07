@@ -22,6 +22,9 @@ func main() {
 	exit := flag.Int("exit", 0, "exit with this code after the work")
 	hang := flag.Bool("hang", false, "ignore SIGTERM and never finish")
 	orphan := flag.Bool("orphan", false, "leave a child running that ignores SIGTERM")
+	write := flag.String("write", "", "write this file in the working directory, failing if it already exists")
+	lock := flag.Bool("lock", false, "leave a directory in the working directory that cannot be removed")
+	stderrMsg := flag.String("stderr", "", "write this to stderr")
 	flag.Parse()
 
 	if *hang {
@@ -32,6 +35,22 @@ func main() {
 		child.Start()
 	}
 
+	if *stderrMsg != "" {
+		fmt.Fprintln(os.Stderr, *stderrMsg)
+	}
+	if *write != "" {
+		f, err := os.OpenFile(*write, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(4)
+		}
+		f.Close()
+	}
+	if *lock {
+		os.MkdirAll("locked/inner", 0o755)
+		os.WriteFile("locked/inner/file", nil, 0o644)
+		os.Chmod("locked/inner", 0o555)
+	}
 	block := make([]byte, 1024)
 	start := time.Now()
 	var sum [32]byte
