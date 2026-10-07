@@ -162,8 +162,15 @@ func (c *check) fence(run string) {
 		if !c.must(err) {
 			continue
 		}
+		var partitions []evidence.Fault
+		if _, err := os.Stat(filepath.Join(dir, "partitions.jsonl.gz")); err == nil {
+			partitions, err = evidence.ReadJSONLGz[evidence.Fault](filepath.Join(dir, "partitions.jsonl.gz"))
+			if !c.must(err) {
+				continue
+			}
+		}
 		base := evidence.FenceSummary{Mode: p.Mode, Replicas: p.Replicas, Rigs: p.Rigs, Experiments: p.Experiments, States: p.States}
-		r := evidence.SummarizeFence(base, intervals, freezes)
+		r := evidence.SummarizeFence(base, intervals, freezes, partitions)
 		c.same(run+" "+p.Mode, p, r)
 		if p.States["QUEUED"]+p.States["RUNNING"] > 0 {
 			c.fail("%s %s: experiments left open", run, p.Mode)
@@ -172,6 +179,9 @@ func (c *check) fence(run string) {
 		case "fenced":
 			if r.ProcessOverlaps != 0 || r.SessionOverlaps != 0 {
 				c.fail("CLAIM: %s fenced rigs ran overlapping work: %d process pairs, %d session pairs", run, r.ProcessOverlaps, r.SessionOverlaps)
+			}
+			if run == "linux" && r.Partitions == 0 {
+				c.fail("linux fenced: no rig was ever partitioned")
 			}
 			if r.StaleRefused == 0 {
 				c.fail("%s fenced: no stale fence ever reached a rig, so the freezes never landed", run)

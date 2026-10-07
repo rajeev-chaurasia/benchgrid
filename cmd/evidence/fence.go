@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -80,6 +81,15 @@ func (h *harness) fenceMode(ctx context.Context, dir, mode, linuxImage string) (
 		})
 	}()
 
+	var partitions []evidence.Fault
+	if linuxImage != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			partitions = c.partition(stop, epoch)
+		}()
+	}
+
 	for i := 0; i < fenceExperiments; i++ {
 		s := benchSpec(fmt.Sprintf("%040x", i), "-rounds", "2000", "-sleep", "200ms")
 		s.Requirements.AllowEmulated = true
@@ -123,6 +133,11 @@ func (h *harness) fenceMode(ctx context.Context, dir, mode, linuxImage string) (
 		return base, err
 	}
 	if linuxImage != "" {
+		if err := evidence.WriteJSONLGz(filepath.Join(out, "partitions.jsonl.gz"), partitions); err != nil {
+			return base, err
+		}
+	}
+	if linuxImage != "" {
 		// The Linux runs publish their run artifacts too, so the validator can
 		// check from the runs themselves that they ran on Linux and that the
 		// memory figures are in bytes.
@@ -130,7 +145,7 @@ func (h *harness) fenceMode(ctx context.Context, dir, mode, linuxImage string) (
 			return base, err
 		}
 	}
-	s := evidence.SummarizeFence(base, intervals, freezes)
+	s := evidence.SummarizeFence(base, intervals, freezes, partitions)
 	return s, evidence.WriteJSON(filepath.Join(out, "summary.json"), s)
 }
 
@@ -181,4 +196,31 @@ func (c *cluster) intervals() ([]agent.Interval, error) {
 		all = append(all, rows...)
 	}
 	return all, nil
+}
+
+// partition cuts one rig container at a time off the network for longer than
+// its lease, then reconnects it, until stop closes. The agent keeps running
+// through it: its heartbeats fail, its lease lapses, its attempt is requeued
+// elsewhere, and when the network returns it reports a result the control
+// plane has moved past. That is the failure a partition produces and a crash
+// does not.
+func (c *cluster) partition(stop <-chan struct{}, epoch time.Time) []evidence.Fault {
+	rng := rand.New(rand.NewPCG(11, 11))
+	var out []evidence.Fault
+	for {
+		select {
+		case <-stop:
+			return out
+		case <-time.After(time.Duration(2000+rng.IntN(3000)) * time.Millisecond):
+		}
+		a := c.agents[rng.IntN(len(c.agents))]
+		f := evidence.Fault{Kind: "partition", Target: a.name, AtNS: time.Since(epoch).Nanoseconds()}
+		if exec.Command("docker", "network", "disconnect", "bridge", a.container).Run() != nil {
+			continue
+		}
+		time.Sleep(fenceTTL + time.Duration(1000+rng.IntN(4000))*time.Millisecond)
+		exec.Command("docker", "network", "connect", "bridge", a.container).Run()
+		f.UntilNS = time.Since(epoch).Nanoseconds()
+		out = append(out, f)
+	}
 }
