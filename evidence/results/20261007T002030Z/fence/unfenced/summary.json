@@ -1,0 +1,16 @@
+{
+  "mode": "unfenced",
+  "replicas": 3,
+  "rigs": 8,
+  "experiments": 300,
+  "states": {
+    "SUCCEEDED": 300
+  },
+  "freezes": 40,
+  "process_intervals": 960,
+  "session_intervals": 320,
+  "stale_arrivals": 35,
+  "stale_refused": 0,
+  "process_overlaps": 83,
+  "session_overlaps": 46
+}

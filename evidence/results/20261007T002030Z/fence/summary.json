@@ -1,0 +1,34 @@
+[
+  {
+    "mode": "fenced",
+    "replicas": 3,
+    "rigs": 8,
+    "experiments": 300,
+    "states": {
+      "SUCCEEDED": 300
+    },
+    "freezes": 34,
+    "process_intervals": 922,
+    "session_intervals": 314,
+    "stale_arrivals": 32,
+    "stale_refused": 32,
+    "process_overlaps": 0,
+    "session_overlaps": 0
+  },
+  {
+    "mode": "unfenced",
+    "replicas": 3,
+    "rigs": 8,
+    "experiments": 300,
+    "states": {
+      "SUCCEEDED": 300
+    },
+    "freezes": 40,
+    "process_intervals": 960,
+    "session_intervals": 320,
+    "stale_arrivals": 35,
+    "stale_refused": 0,
+    "process_overlaps": 83,
+    "session_overlaps": 46
+  }
+]

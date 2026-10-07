@@ -1,0 +1,94 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a113c43266d2b3e7889134faaf2f58",
+  "attempt": 1,
+  "fence": 28,
+  "status": "INVALID",
+  "status_reason": "during:cpu_util",
+  "spec_sha256": "e2f6ccd1ed0df4cbc9afa998f22129aaa3e18468228e5dbae789e780428939be",
+  "spec": {
+    "benchmark": "cpu_hash",
+    "revision": "00000000000000000000000000000000000a0132",
+    "command": [
+      "{binary}",
+      "-rounds",
+      "100000"
+    ],
+    "warmups": 5,
+    "repetitions": 30,
+    "timeout_seconds": 600,
+    "requirements": {
+      "allow_emulated": false
+    },
+    "environment": {
+      "max_cpu_util": 0.4,
+      "preflight_timeout_seconds": 20,
+      "gate_during_measurement": true
+    },
+    "metrics": [
+      {
+        "name": "iteration_latency",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "6dc911c9bd9728bb0b3cb3ac041ad2926b186f4569db8e495f9e1da5b155b140"
+    }
+  },
+  "rig": {
+    "rig_id": "rig-00",
+    "hardware_class": "darwin-arm64",
+    "arch": "arm64",
+    "os": "darwin",
+    "kernel": "25.5.0",
+    "cpu_model": "Apple M4",
+    "cpu_cores": 10,
+    "mem_bytes": 17179869184,
+    "gpu_vendor": "",
+    "gpu_model": "",
+    "gpu_memory_bytes": 0,
+    "driver_version": "",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "00000000000000000000000000000000000a0132",
+    "binary_sha256": "6dc911c9bd9728bb0b3cb3ac041ad2926b186f4569db8e495f9e1da5b155b140",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 11.37890625,
+      "cpu_util": 0.25000000037553327,
+      "mem_free": 3734847488,
+      "gpu_util": null,
+      "temp_c": 52.524200439453125
+    },
+    "preflight_after": {
+      "load1": 11.37890625,
+      "cpu_util": 1,
+      "mem_free": 3663642624,
+      "gpu_util": null,
+      "temp_c": 53.1209716796875
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-07T00:29:47.706028000Z",
+    "started": "2026-10-07T00:29:47.718448000Z",
+    "finished": "2026-10-07T00:29:51.779799000Z"
+  },
+  "summary": {
+    "iteration_latency": {
+      "unit": "ns",
+      "n": 30,
+      "mean": 49498719.5,
+      "median": 48603541.5,
+      "p90": 55999466.1,
+      "p95": 61914845.800000004,
+      "p99": 91024379.43000002,
+      "stddev": 11927190.37881237,
+      "mad": 3692333.5,
+      "cv": 0.24095957429388393
+    }
+  }
+}

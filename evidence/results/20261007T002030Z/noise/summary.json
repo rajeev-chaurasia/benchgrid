@@ -1,0 +1,382 @@
+[
+  {
+    "condition": "loaded_gated",
+    "runs": 12,
+    "succeeded": 1,
+    "invalid": 11,
+    "median_cv_of_succeeded": 0.0838728368453498,
+    "max_cv_of_succeeded": 0.0838728368453498,
+    "median_of_median_latency_ns": 44733312.5,
+    "per_run": [
+      {
+        "id": "exp_01a113c2db41ff135617294018e7dc8e",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c31593efba9f20375028ab39b1",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c3530a9ac3ec0e042b56fca1e5",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c385b4dd7529e16b803caec356",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c3ccb55cdcfa586fabd2762841",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c40298174219044b4ba2bc3ab7",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.0838728368453498,
+        "median_ns": 44733312.5
+      },
+      {
+        "id": "exp_01a113c43266d2b3e7889134faaf2f58",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c46ad73c94078f71409a460a55",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c4a5175f1b343b91a999c1a4b2",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c4dd8d459005cb1537daf056c2",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c51e120c6055f7179f23d1471b",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c56f7334f8094115a8e7872316",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      }
+    ]
+  },
+  {
+    "condition": "loaded_ungated",
+    "runs": 12,
+    "succeeded": 12,
+    "invalid": 0,
+    "median_cv_of_succeeded": 0.23425626165496133,
+    "max_cv_of_succeeded": 0.3985638082161471,
+    "median_of_median_latency_ns": 46215687.25,
+    "per_run": [
+      {
+        "id": "exp_01a113c2ce35136434dc8a750a80dafe",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.3585939689001715,
+        "median_ns": 43136146
+      },
+      {
+        "id": "exp_01a113c305555f18bc622f4b5017776e",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.2710941915514064,
+        "median_ns": 47769479
+      },
+      {
+        "id": "exp_01a113c34200f376166613bb52868f8f",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.3985638082161471,
+        "median_ns": 42108604.5
+      },
+      {
+        "id": "exp_01a113c37850aea12cfc59fe9880eebd",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.13881235221935997,
+        "median_ns": 53665208.5
+      },
+      {
+        "id": "exp_01a113c3c05217065476ca869ce5fb72",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.2262687168506106,
+        "median_ns": 39786249.5
+      },
+      {
+        "id": "exp_01a113c3f41bb76c4ec8365e939742a9",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.20597995840057542,
+        "median_ns": 53812083.5
+      },
+      {
+        "id": "exp_01a113c424f2f1fe784afec1c3ef426d",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.18446145581242562,
+        "median_ns": 42816770.5
+      },
+      {
+        "id": "exp_01a113c45ba6f197fd04e351a0955a48",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.17718755410199472,
+        "median_ns": 47960521
+      },
+      {
+        "id": "exp_01a113c4977fbbb971f9672feaa29131",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.32676662894508035,
+        "median_ns": 37557708.5
+      },
+      {
+        "id": "exp_01a113c4ce5e82cd50efc62174fe1cb2",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.26343488011725563,
+        "median_ns": 51572312.5
+      },
+      {
+        "id": "exp_01a113c510c0f27303764c40991454a9",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.21036253361386878,
+        "median_ns": 46962708
+      },
+      {
+        "id": "exp_01a113c56291f5ac2dab69ad6afd64cc",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.24224380645931204,
+        "median_ns": 45468666.5
+      }
+    ]
+  },
+  {
+    "condition": "quiet",
+    "runs": 12,
+    "succeeded": 12,
+    "invalid": 0,
+    "median_cv_of_succeeded": 0.04739000301488694,
+    "max_cv_of_succeeded": 0.11580357848391115,
+    "median_of_median_latency_ns": 37674437.75,
+    "per_run": [
+      {
+        "id": "exp_01a113c2acdc29105b4ce5262a0d80fb",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.09591544160315217,
+        "median_ns": 39788333.5
+      },
+      {
+        "id": "exp_01a113c2ed9c3f5f380574dae20bc32e",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.040388197519803444,
+        "median_ns": 37680583.5
+      },
+      {
+        "id": "exp_01a113c32c6f302178873edb70fa3f0f",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.0530078524510465,
+        "median_ns": 37701625
+      },
+      {
+        "id": "exp_01a113c362bc9b0edeec15ba525e0119",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.028707006082832904,
+        "median_ns": 37668292
+      },
+      {
+        "id": "exp_01a113c3a7c50fa10938f412b4d9d3ac",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.043701916134777155,
+        "median_ns": 37487687
+      },
+      {
+        "id": "exp_01a113c3de7a94ba6cfd9a3198dc4333",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.07576533511399154,
+        "median_ns": 37613562.5
+      },
+      {
+        "id": "exp_01a113c40f5a109603d31ab8b9180d6a",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.011395395759515902,
+        "median_ns": 37310313
+      },
+      {
+        "id": "exp_01a113c4460c54cdb678c49402597fca",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.05107808989499672,
+        "median_ns": 38044374.5
+      },
+      {
+        "id": "exp_01a113c481e612638b181d41152edfd6",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.011309699594737939,
+        "median_ns": 37292875
+      },
+      {
+        "id": "exp_01a113c4b5b77a82c0b31a1671604e0a",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.05498315895541505,
+        "median_ns": 37548333
+      },
+      {
+        "id": "exp_01a113c4fb25b677dd7e0b7accad4d2a",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.01849244247316602,
+        "median_ns": 37967916.5
+      },
+      {
+        "id": "exp_01a113c54bf95169fc72cbbb94c9f20e",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.11580357848391115,
+        "median_ns": 43565979
+      }
+    ]
+  },
+  {
+    "condition": "quiet_gated",
+    "runs": 12,
+    "succeeded": 8,
+    "invalid": 4,
+    "median_cv_of_succeeded": 0.013353668406163073,
+    "max_cv_of_succeeded": 0.04602810123619615,
+    "median_of_median_latency_ns": 37432916.5,
+    "per_run": [
+      {
+        "id": "exp_01a113c2b99c723c1f2af515d064f132",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c2f86458a593540f3a054b3b44",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c3373520d86a453ab326c6ea51",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.011590028714453778,
+        "median_ns": 36926208.5
+      },
+      {
+        "id": "exp_01a113c36d851bb107778487b042492a",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.041111266707254755,
+        "median_ns": 38029479
+      },
+      {
+        "id": "exp_01a113c3b291709f8ecaba771469c430",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.042535788422713196,
+        "median_ns": 37967041.5
+      },
+      {
+        "id": "exp_01a113c3e9487fde22e24c80d98fba61",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.04602810123619615,
+        "median_ns": 39161104.5
+      },
+      {
+        "id": "exp_01a113c41a25da7872f52399ca51cc1c",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.00955575971040447,
+        "median_ns": 37349354
+      },
+      {
+        "id": "exp_01a113c450d7677fb0fb341ed4d115ec",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.014059589920926525,
+        "median_ns": 37306042
+      },
+      {
+        "id": "exp_01a113c48cb1daeda626c19c558f5734",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.01264774689139962,
+        "median_ns": 37284396
+      },
+      {
+        "id": "exp_01a113c4c08674bf95b1b53912e89104",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      },
+      {
+        "id": "exp_01a113c505f1e3e6dbf0996ad2477e54",
+        "status": "SUCCEEDED",
+        "reason": "",
+        "cv": 0.009656523158743003,
+        "median_ns": 37516479
+      },
+      {
+        "id": "exp_01a113c557bff2b3f59d63e105a5bd19",
+        "status": "INVALID",
+        "reason": "during:cpu_util",
+        "cv": null,
+        "median_ns": null
+      }
+    ]
+  }
+]
