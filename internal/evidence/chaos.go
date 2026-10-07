@@ -71,12 +71,16 @@ type ChaosSummary struct {
 	ArtifactErrors  []string       `json:"artifact_errors"`
 	// PlacementViolations counts verified runs whose rig, as the run itself
 	// records it, does not satisfy the run's own spec.
-	PlacementViolations int          `json:"placement_violations"`
-	ProcessOverlaps     int          `json:"process_overlaps"`
-	SessionOverlaps     int          `json:"session_overlaps"`
-	ProcessRuns         int          `json:"process_intervals"`
-	RigsLeasedAtEnd     int          `json:"rigs_still_leased_at_end"`
-	QuarantinedRigs     []Quarantine `json:"quarantined_rigs"`
+	PlacementViolations int `json:"placement_violations"`
+	// StaleRefused counts stale dispatches the rigs refused during chaos. The
+	// fence run aims its freezes; these come from freezes and kills at random
+	// moments, so this is how often the dangerous case arises unaided.
+	StaleRefused    int          `json:"stale_refused"`
+	ProcessOverlaps int          `json:"process_overlaps"`
+	SessionOverlaps int          `json:"session_overlaps"`
+	ProcessRuns     int          `json:"process_intervals"`
+	RigsLeasedAtEnd int          `json:"rigs_still_leased_at_end"`
+	QuarantinedRigs []Quarantine `json:"quarantined_rigs"`
 }
 
 // SummarizeChaos counts outcomes against expectations and checks, for every
@@ -134,6 +138,8 @@ func SummarizeChaos(exps []ChaosExperiment, faults []Fault, intervals []agent.In
 			proc = append(proc, sp)
 		case "session":
 			sess = append(sess, sp)
+		case "rejected":
+			s.StaleRefused++
 		}
 	}
 	s.ProcessRuns = len(proc)

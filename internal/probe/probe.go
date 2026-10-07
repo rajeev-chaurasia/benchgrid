@@ -89,6 +89,11 @@ func (p *Prober) Describe(ctx context.Context, rigID string) capability.Rig {
 	}
 	if infos, err := cpu.InfoWithContext(ctx); err == nil && len(infos) > 0 {
 		r.CPUModel = strings.TrimSpace(infos[0].ModelName)
+		if r.CPUModel == "" {
+			// ARM Linux reports no model name, only implementer and part
+			// numbers, which identify the core even if they read poorly.
+			r.CPUModel = strings.TrimSpace(infos[0].VendorID + " " + infos[0].Family + " " + infos[0].Model)
+		}
 	}
 	if vm, err := mem.VirtualMemoryWithContext(ctx); err == nil {
 		r.MemBytes = int64(vm.Total)
