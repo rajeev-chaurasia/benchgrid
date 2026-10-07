@@ -265,10 +265,42 @@ def validate(a: argparse.Namespace) -> int:
         recs = [json.loads(l) for l in (d / "jobs.jsonl").read_text().splitlines() if l]
         if summarize_scale(recs) != json.loads((d / "summary.json").read_text()):
             bad.append("scale summary does not match its jobs")
+    if (root / "gate" / "summary.json").exists():
+        bad += validate_gate(root / "gate")
     for b in bad:
         print("FAIL", b)
     print("ok" if not bad else f"{len(bad)} failures")
     return 1 if bad else 0
+
+
+def validate_gate(d: Path) -> list[str]:
+    """Recomputes every verdict from the published samples of the runs each
+    comparison used, and the evaluation summary from the verdicts."""
+    from .evaluate import summarize
+    from .gate import Config
+    from .stats import decide, ratio_interval
+
+    bad = []
+    cfg = Config()
+    results = [json.loads(l) for l in (d / "comparisons.jsonl").read_text().splitlines() if l]
+    for r in results:
+        if r["verdict"] == "ERROR":
+            continue
+        pairs = []
+        runs = r["runs"]
+        for i in range(0, len(runs), 2):
+            got = {}
+            for run in runs[i:i + 2]:
+                f = d / "store" / "runs" / run["experiment"] / f"attempt-{run['attempt']}" / "samples.jsonl"
+                got[run["side"]] = [json.loads(l)["value"] for l in f.read_text().splitlines()
+                                    if l and json.loads(l)["metric"] == cfg.metric and not json.loads(l)["warmup"]]
+            pairs.append((got["baseline"], got["candidate"]))
+        e = ratio_interval(pairs) if len(pairs) >= 1 else None
+        if e is None or abs(e.ratio - r["ratio"]) > 1e-12 or decide(e, cfg.threshold).value != r["verdict"]:
+            bad.append(f"comparison {r['profile']} {r['injected']}% does not recompute")
+    if summarize(results) != json.loads((d / "summary.json").read_text()):
+        bad.append("gate summary does not match its comparisons")
+    return bad
 
 
 def main(argv: list[str] | None = None) -> int:

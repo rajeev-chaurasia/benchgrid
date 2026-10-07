@@ -21,12 +21,19 @@ from pathlib import Path
 
 from .client import Client
 from .gate import Config, build_spec, compare
+from .studies import fetch_run
 
 
-def spec_template(profile: str, os_name: str, isolate: bool) -> dict:
+def spec_template(profile: str, os_name: str, isolate: bool, hardware_class: str = "") -> dict:
     env: dict = {}
     if isolate:
         env["require_isolation"] = True
+        env["max_clock_offset_ms"] = 5.0
+    req: dict = {"os": os_name}
+    if hardware_class:
+        req["hardware_class"] = hardware_class
+    else:
+        req["allow_emulated"] = True
     return {
         "benchmark": f"avbench_{profile}",
         "revision": "0" * 40,
@@ -34,7 +41,7 @@ def spec_template(profile: str, os_name: str, isolate: bool) -> dict:
         "warmups": 2,
         "repetitions": 10,
         "timeout_seconds": 600,
-        "requirements": {"os": os_name, "allow_emulated": True},
+        "requirements": req,
         "environment": env,
         "metrics": [{"name": "work_ns", "unit": "ns", "direction": "lower_is_better"}],
         "artifacts": {"binary_sha256": "0" * 64},
@@ -84,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--revision", required=True)
     p.add_argument("--os", default="linux")
     p.add_argument("--isolate", action="store_true", help="require rigs that pin to isolated CPUs")
+    p.add_argument("--hardware-class", default="", help="run every comparison on this class of rig")
+    p.add_argument("--fetch", action="store_true", help="copy every run's sealed files into OUT/store")
     p.add_argument("--nulls", type=int, default=6)
     p.add_argument("--injected", default="3,5,8,12")
     p.add_argument("--injected-per-profile", type=int, default=2)
@@ -100,9 +109,12 @@ def main(argv: list[str] | None = None) -> int:
 
     def one(item: tuple[str, float]) -> dict:
         profile, pct = item
-        t = spec_template(profile, a.os, a.isolate)
+        t = spec_template(profile, a.os, a.isolate, a.hardware_class)
         cand_args = ["--slowdown", f"{pct:g}"] if pct else []
         r = compare(client, build_spec(t, a.revision, sha, []), build_spec(t, a.revision, sha, cand_args), cfg)
+        if a.fetch:
+            for run in r.runs:
+                fetch_run(client, run.experiment, out / "store")
         return {"profile": profile, "injected": pct, **asdict(r)}
 
     out = Path(a.out)
