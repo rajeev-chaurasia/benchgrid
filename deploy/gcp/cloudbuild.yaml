@@ -15,7 +15,9 @@ steps:
            "workloads/avbench/avbench.cpp", "-o", "/workspace/out/avbench"]
   - id: image
     name: gcr.io/cloud-builders/docker
-    args: ["build", "-f", "deploy/gcp/Dockerfile", "-t", "${_REPO_IMAGE}:${_TAG}", "."]
+    # The context is the build output alone, so the image can only contain
+    # what the steps above produced.
+    args: ["build", "-f", "deploy/gcp/Dockerfile", "-t", "${_REPO_IMAGE}:${_TAG}", "/workspace/out"]
   - id: upload
     name: gcr.io/cloud-builders/gcloud
     args: ["storage", "cp", "/workspace/out/rigagent", "/workspace/out/avbench", "/workspace/out/benchload", "/workspace/out/bgctl", "gs://${_BUCKET}/bin/${_TAG}/"]
