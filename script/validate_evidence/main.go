@@ -227,6 +227,16 @@ func (c *check) noise() {
 		return
 	}
 	c.same("noise", published, r)
+	by := map[string]evidence.NoiseCondition{}
+	for _, n := range r {
+		by[n.Condition] = n
+	}
+	if by["loaded_ungated"].Invalid != 0 {
+		c.fail("noise: an ungated run was declared invalid, so the gate is not the only difference")
+	}
+	if by["loaded_gated"].Invalid == 0 {
+		c.fail("CLAIM: the gate refused no run measured under injected load")
+	}
 }
 
 // everyRunVerifies applies the run contract to every sealed attempt published

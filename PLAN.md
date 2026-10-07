@@ -25,10 +25,18 @@ than left as first written. The substantive changes:
   measured a median CV of 21% with that gate against 17% without it, and a
   higher median latency, with every loaded run published as a success. A gate
   that waits for a quiet window passes late in each quiet gap, which lines
-  iterations up with the onset of the next burst. The gate now also measures
-  the background load during each iteration, less the benchmark's own CPU
-  time, and declares the run INVALID if it was busy. The second claim was
-  rewritten around what that design can show.
+  iterations up with the onset of the next burst.
+- **Checking each iteration on its own then rejected every quiet run.** The
+  macOS CPU counters cannot judge a 40 ms window: quiet iterations measured
+  impossible background loads up to eight times the machine. The gate now
+  measures background load across the whole measured phase, less the
+  benchmark's own CPU time. It is coarser, and the evidence says so: a loaded
+  run that happens to catch few bursts can pass.
+- **The noise conditions ran in blocks.** The host's own load drifted between
+  blocks enough to look like a difference between conditions. They are now
+  interleaved run by run.
+- **The second claim was rewritten** around what the third design can show,
+  after it was measured, which is stated in the README rather than hidden.
 - **The first unfenced control showed no overlap at all.** Each new session's
   preflight was killing every process the agent had ever launched, including
   the other session's, which is accidental fencing. Stale process reaping is

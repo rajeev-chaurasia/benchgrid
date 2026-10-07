@@ -95,7 +95,9 @@ a time, in four conditions:
   across the measured iterations, less the benchmark's own CPU time, and
   declares the run `INVALID` if it exceeded the limit.
 
-Each run gets exactly one attempt, so an `INVALID` verdict is not retried into
+The conditions are interleaved run by run, not run in blocks, because the
+host's own load drifts over minutes and in blocks the drift reads as a
+difference between conditions. Each run gets exactly one attempt, so an `INVALID` verdict is not retried into
 a second sample of the same noise.
 
 Published: every run artifact, and per condition the number of runs that

@@ -45,16 +45,21 @@ func (h *harness) noise(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Conditions are interleaved run by run rather than run in blocks. The
+	// host's own background load drifts over minutes, and in blocks that drift
+	// shows up as a difference between conditions. A first trial run in
+	// blocks had quiet runs reaching 18% CV in one block and 4% in the next,
+	// with nothing different between them but the time.
 	runs := map[string][]string{}
-	for ci, cond := range noiseConditions {
-		var load *exec.Cmd
-		if cond.stress {
-			load = exec.Command(self, "stress", "-seed", fmt.Sprint(ci+1))
-			if err := load.Start(); err != nil {
-				return err
+	for i := 0; i < noiseRuns; i++ {
+		for ci, cond := range noiseConditions {
+			var load *exec.Cmd
+			if cond.stress {
+				load = exec.Command(self, "stress", "-seed", fmt.Sprint(i*len(noiseConditions)+ci+1))
+				if err := load.Start(); err != nil {
+					return err
+				}
 			}
-		}
-		for i := 0; i < noiseRuns; i++ {
 			s := spec.Spec{
 				Benchmark: "cpu_hash", Revision: fmt.Sprintf("%040x", 0xa0000+ci*100+i),
 				Command: []string{spec.BinaryPlaceholder, "-rounds", "100000"},
@@ -64,7 +69,7 @@ func (h *harness) noise(ctx context.Context) error {
 			if cond.gated {
 				// This host idles at roughly a fifth of its CPU busy with other
 				// software, so the limit sits above that rather than at an ideal
-				// nobody's laptop meets.
+				// nobody's laptop meets. It was set before any gated run.
 				limit := 0.4
 				s.Environment = spec.Environment{MaxCPUUtil: &limit, GateDuringMeasurement: true, PreflightTimeoutSeconds: 20}
 			}
@@ -74,15 +79,16 @@ func (h *harness) noise(ctx context.Context) error {
 			}
 			runs[cond.name] = append(runs[cond.name], id)
 			// One at a time, so no run is measured next to another.
-			if err := c.drain(ctx, 10*time.Minute); err != nil {
+			err = c.drain(ctx, 10*time.Minute)
+			if load != nil {
+				load.Process.Kill()
+				load.Wait()
+			}
+			if err != nil {
 				return err
 			}
+			time.Sleep(500 * time.Millisecond)
 		}
-		if load != nil {
-			load.Process.Kill()
-			load.Wait()
-		}
-		time.Sleep(2 * time.Second)
 	}
 	if err := copyDir(filepath.Join(c.store, "runs"), filepath.Join(out, "store", "runs")); err != nil {
 		return err
