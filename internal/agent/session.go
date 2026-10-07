@@ -192,7 +192,25 @@ func (a *Agent) execute(s *session) outcome {
 		return fail(artifact.Invalid, "preflight:isolation")
 	}
 	if limit := sp.Environment.MaxClockOffsetMS; limit != nil {
-		if tuning.ClockSynced == nil || !*tuning.ClockSynced || tuning.ClockOffsetMS == nil || *tuning.ClockOffsetMS > *limit {
+		// A rig that has just booted is synchronised but still slewing its
+		// clock toward the reference, so the offset is waited on, like load,
+		// rather than failed at first sight.
+		ok := false
+		deadline := time.Now().Add(preflightLimit(sp.Environment))
+		for {
+			if tuning.ClockSynced != nil && *tuning.ClockSynced && tuning.ClockOffsetMS != nil && *tuning.ClockOffsetMS <= *limit {
+				ok = true
+				break
+			}
+			if time.Now().After(deadline) || ctx.Err() != nil {
+				break
+			}
+			time.Sleep(time.Second)
+			tuning = probe.ReadHostTuning(ctx, a.cfg.HostRoots)
+		}
+		out.host, _ = json.MarshalIndent(hostRecord{HostTuning: tuning, BenchCPUs: desc.BenchCPUs,
+			IsolatedBench: desc.IsolatedBench, BenchCgroup: a.benchCgroup, Pinned: a.self != ""}, "", "  ")
+		if !ok {
 			return fail(artifact.Invalid, "preflight:clock")
 		}
 	}
@@ -388,12 +406,15 @@ func cancelReason(ctx context.Context) string {
 // sets is met or the preflight timeout passes. Waiting rather than failing at
 // once is the cool-down: a rig that just finished a heavy run is usually fine
 // a few seconds later.
-func (a *Agent) waitForGate(ctx context.Context, env spec.Environment) (probe.Readings, string, bool) {
-	limit := time.Duration(env.PreflightTimeoutSeconds) * time.Second
-	if limit == 0 {
-		limit = 30 * time.Second
+func preflightLimit(env spec.Environment) time.Duration {
+	if env.PreflightTimeoutSeconds > 0 {
+		return time.Duration(env.PreflightTimeoutSeconds) * time.Second
 	}
-	deadline := time.Now().Add(limit)
+	return 30 * time.Second
+}
+
+func (a *Agent) waitForGate(ctx context.Context, env spec.Environment) (probe.Readings, string, bool) {
+	deadline := time.Now().Add(preflightLimit(env))
 	for {
 		r := a.cfg.Prober.Read(ctx)
 		field, ok := Gate(env, r)
