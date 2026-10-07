@@ -19,6 +19,7 @@ import (
 	"github.com/rajeev-chaurasia/benchgrid/internal/probe"
 	"github.com/rajeev-chaurasia/benchgrid/internal/spec"
 	"github.com/rajeev-chaurasia/benchgrid/internal/wire"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 var benchload, benchloadSHA string
@@ -279,32 +280,86 @@ func TestGateTreatsUnreadableAsFailing(t *testing.T) {
 
 var _ = context.Background
 
-// An agent killed mid-run leaves its benchmark behind in its own process
-// group. The next agent on the rig must kill it before measuring anything.
-func TestRestartReapsWhatTheLastAgentLeft(t *testing.T) {
-	dir := t.TempDir()
+func startOrphan(t *testing.T) int {
+	t.Helper()
 	cmd := exec.Command(benchload, "-rounds", "10", "-hang", "-orphan")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	go cmd.Wait()
-	pg := cmd.Process.Pid
-	os.MkdirAll(filepath.Join(dir, "pgroups"), 0o755)
-	os.WriteFile(filepath.Join(dir, "pgroups", strconv.Itoa(pg)), nil, 0o644)
+	t.Cleanup(func() { killGroup(cmd.Process.Pid, 9) })
 	time.Sleep(100 * time.Millisecond)
+	return cmd.Process.Pid
+}
 
-	a, err := New(Config{RigID: "rig-r", StateDir: dir, Fenced: true, Prober: &probe.Prober{CPUWindow: time.Millisecond}})
+func writeMarker(t *testing.T, dir string, m groupMarker) {
+	t.Helper()
+	os.MkdirAll(filepath.Join(dir, "pgroups"), 0o755)
+	b, _ := json.Marshal(m)
+	os.WriteFile(filepath.Join(dir, "pgroups", strconv.Itoa(m.PGID)), b, 0o644)
+}
+
+func restart(t *testing.T, dir string) (*Agent, string) {
+	t.Helper()
+	log := filepath.Join(dir, "intervals.jsonl")
+	a, err := New(Config{RigID: "rig-r", StateDir: dir, Fenced: true, IntervalLog: log, Prober: &probe.Prober{CPUWindow: time.Millisecond}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	a.intervals.Close()
+	return a, log
+}
+
+// An agent killed mid-run leaves its benchmark behind in its own process
+// group. The next agent on the rig must kill it before measuring anything,
+// and must record how long it ran, or the overlap count is blind to it.
+func TestRestartReapsAndRecordsWhatTheLastAgentLeft(t *testing.T) {
+	dir := t.TempDir()
+	pg := startOrphan(t)
+	ct, _ := mustCreateTime(pg)
+	writeMarker(t, dir, groupMarker{PGID: pg, Fence: 7, ExperimentID: "exp_o", Attempt: 1, StartNS: 123, CreateTimeMS: ct})
+
+	a, log := restart(t, dir)
 	if groupAlive(pg) {
-		killGroup(pg, 9)
 		t.Fatal("restart left the previous agent's benchmark running")
 	}
 	if a.quarantined() {
 		t.Error("a successful reap quarantined the rig")
 	}
+	ivs := readIntervals(t, log)
+	if len(ivs) != 1 || ivs[0].Outcome != "orphan_reaped" || ivs[0].Fence != 7 || ivs[0].StartNS != 123 || ivs[0].EndNS <= 123 {
+		t.Errorf("orphan's lifetime not recorded: %+v", ivs)
+	}
+}
+
+func TestRestartLeavesAReusedGroupIDAlone(t *testing.T) {
+	dir := t.TempDir()
+	pg := startOrphan(t)
+	ct, _ := mustCreateTime(pg)
+	writeMarker(t, dir, groupMarker{PGID: pg, Fence: 7, StartNS: 1, CreateTimeMS: ct - 5000})
+	restart(t, dir)
+	if !groupAlive(pg) {
+		t.Error("killed a process group whose id had been reused by something else")
+	}
+}
+
+func TestRestartAfterAnInterruptedLaunchQuarantines(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "pgroups"), 0o755)
+	os.WriteFile(filepath.Join(dir, "pgroups", launchingPrefix+"3-exp_l-1"), nil, 0o644)
+	a, _ := restart(t, dir)
+	if !a.quarantined() || a.Snapshot().AgentReason != "launch_interrupted" {
+		t.Errorf("an unaccounted launch was left in service: %+v", a.Snapshot())
+	}
+}
+
+func mustCreateTime(pid int) (int64, error) {
+	p, err := process.NewProcess(int32(pid))
+	if err != nil {
+		return 0, err
+	}
+	return p.CreateTime()
 }
 
 func TestBackgroundUtilSubtractsTheBenchmark(t *testing.T) {

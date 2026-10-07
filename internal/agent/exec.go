@@ -41,13 +41,16 @@ var grace = 2 * time.Second
 // spawns workers and is killed by pid alone leaves them running on the rig,
 // which is exactly the contamination the next holder's preflight exists to
 // find.
-func runIteration(ctx context.Context, argv []string, clock func() int64, onStart func(pid int)) (IterationResult, error) {
+func runIteration(ctx context.Context, argv []string, clock func() int64, beforeStart func(), onStart func(pid int, startNS int64)) (IterationResult, error) {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &limitedBuffer{buf: &stderr, max: 16 << 10}
 
+	if beforeStart != nil {
+		beforeStart()
+	}
 	r := IterationResult{StartNS: clock()}
 	wallStart := time.Now()
 	if err := cmd.Start(); err != nil {
@@ -55,7 +58,7 @@ func runIteration(ctx context.Context, argv []string, clock func() int64, onStar
 	}
 	r.PID = cmd.Process.Pid
 	if onStart != nil {
-		onStart(r.PID)
+		onStart(r.PID, r.StartNS)
 	}
 
 	done := make(chan error, 1)

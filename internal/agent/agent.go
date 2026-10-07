@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -131,8 +130,8 @@ func New(cfg Config) (*Agent, error) {
 		pgroups:   map[int]*session{},
 	}
 	a.descriptor = a.describe(context.Background())
-	if err := a.reapPrevious(); err != nil {
-		a.state, a.reason = StateQuarantined, "stale_process_at_start"
+	if reason, err := a.reapPrevious(); err != nil {
+		a.state, a.reason = StateQuarantined, reason
 		a.log.Error("quarantined at start", "err", err)
 	}
 	return a, nil
@@ -148,44 +147,6 @@ func (a *Agent) clock() int64 {
 		return time.Since(a.epoch).Nanoseconds()
 	}
 	return ts.Nano()
-}
-
-func (a *Agent) pgroupDir() string { return filepath.Join(a.cfg.StateDir, "pgroups") }
-
-// reapPrevious kills every process group a previous incarnation of this agent
-// launched and did not see finish. An agent killed mid-run leaves its
-// benchmark running, because the benchmark is in its own process group, and
-// the restarted agent must not measure anything next to it.
-//
-// A recorded group id could in principle have been reused by an unrelated
-// process group since the crash. docs/known-misses.md records that.
-func (a *Agent) reapPrevious() error {
-	entries, err := os.ReadDir(a.pgroupDir())
-	if err != nil {
-		return err
-	}
-	var failed []string
-	for _, e := range entries {
-		pg, err := strconv.Atoi(e.Name())
-		if err != nil {
-			continue
-		}
-		killGroup(pg, 9)
-		deadline := time.Now().Add(2 * time.Second)
-		for groupAlive(pg) && time.Now().Before(deadline) {
-			time.Sleep(20 * time.Millisecond)
-		}
-		if groupAlive(pg) {
-			failed = append(failed, e.Name())
-			continue
-		}
-		a.log.Warn("reaped process group left by a previous agent", "pgid", pg)
-		os.Remove(filepath.Join(a.pgroupDir(), e.Name()))
-	}
-	if len(failed) > 0 {
-		return fmt.Errorf("process groups survived: %v", failed)
-	}
-	return nil
 }
 
 func (a *Agent) describe(ctx context.Context) capability.Rig {
@@ -341,19 +302,6 @@ func (a *Agent) finished(s *session) {
 	}
 }
 
-func (a *Agent) trackGroup(pgid int, owner *session) {
-	a.smu.Lock()
-	defer a.smu.Unlock()
-	marker := filepath.Join(a.pgroupDir(), strconv.Itoa(pgid))
-	if owner != nil {
-		a.pgroups[pgid] = owner
-		os.WriteFile(marker, nil, 0o644)
-	} else {
-		delete(a.pgroups, pgid)
-		os.Remove(marker)
-	}
-}
-
 // reapStale kills every process group whose session has already finished
 // executing and yet is still alive. Groups belonging to sessions still running
 // are left alone: if two sessions run at once, that is for the fence to
@@ -383,7 +331,7 @@ func (a *Agent) reapStale() error {
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
-		a.trackGroup(pg, nil)
+		a.untrackGroup(pg)
 	}
 	return nil
 }

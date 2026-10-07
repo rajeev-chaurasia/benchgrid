@@ -173,17 +173,21 @@ func (a *Agent) execute(s *session) outcome {
 			measuredStart = time.Now()
 			busyStart, haveBusy = probe.BusyCPUSeconds(ctx)
 		}
-		r, err := runIteration(ctx, argv, a.clock, func(pid int) {
+		r, err := runIteration(ctx, argv, a.clock, func() { a.markLaunching(s) }, func(pid int, startNS int64) {
 			s.mu.Lock()
 			s.pgid = pid
 			s.mu.Unlock()
-			a.trackGroup(pid, s)
+			a.trackGroup(pid, s, startNS)
 		})
+		if r.PID == 0 {
+			// Nothing started, so there is nothing for the marker to warn about.
+			os.Remove(a.launchingPath(s))
+		}
 		a.intervals.Record(Interval{RigID: a.cfg.RigID, Kind: "process", Fence: s.fence,
 			ExperimentID: s.d.ExperimentID, Attempt: s.d.Attempt, PID: r.PID,
 			StartNS: r.StartNS, EndNS: r.EndNS})
 		if r.PID > 0 && !groupAlive(r.PID) {
-			a.trackGroup(r.PID, nil)
+			a.untrackGroup(r.PID)
 		}
 		if first < 0 {
 			first = r.StartNS
@@ -388,7 +392,7 @@ func (a *Agent) cleanup(s *session) error {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		a.trackGroup(pg, nil)
+		a.untrackGroup(pg)
 	}
 	return os.RemoveAll(filepath.Join(a.cfg.StateDir, "work", s.d.ExperimentID+"-"+strconv.Itoa(s.d.Attempt)))
 }
