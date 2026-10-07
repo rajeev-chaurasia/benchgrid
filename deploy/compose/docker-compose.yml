@@ -1,0 +1,64 @@
+# The whole system on one machine: Postgres, two control plane replicas, and
+# three rig agents as Linux containers. The rigs here are containers, which is
+# enough to run the control plane against real agents and not enough to say
+# anything about real hardware. script/compose_smoke.sh drives it.
+name: benchgrid
+
+x-benchgrid: &benchgrid
+  image: benchgrid:local
+  restart: on-failure
+  depends_on:
+    postgres:
+      condition: service_healthy
+  volumes:
+    - store:/store
+  environment:
+    BENCHGRID_DATABASE_URL: postgres://postgres:postgres@postgres:5432/benchgrid?sslmode=disable
+
+x-rig: &rig
+  image: benchgrid:local
+  entrypoint: ["/usr/local/bin/rigagent"]
+  restart: on-failure
+  depends_on: [benchgrid-1, benchgrid-2]
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: benchgrid
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  benchgrid-1:
+    <<: *benchgrid
+    command: ["-listen", ":8080", "-artifacts", "/store", "-id", "benchgrid-1"]
+    ports: ["127.0.0.1:18080:8080"]
+
+  benchgrid-2:
+    <<: *benchgrid
+    command: ["-listen", ":8080", "-artifacts", "/store", "-id", "benchgrid-2"]
+
+  rig-1:
+    <<: *rig
+    command: ["-id", "rig-1", "-state-dir", "/state", "-control", "http://benchgrid-1:8080,http://benchgrid-2:8080", "-listen", ":9090", "-endpoint", "http://rig-1:9090"]
+    volumes: ["rig-1:/state"]
+
+  rig-2:
+    <<: *rig
+    command: ["-id", "rig-2", "-state-dir", "/state", "-control", "http://benchgrid-2:8080,http://benchgrid-1:8080", "-listen", ":9090", "-endpoint", "http://rig-2:9090"]
+    volumes: ["rig-2:/state"]
+
+  rig-3:
+    <<: *rig
+    command: ["-id", "rig-3", "-state-dir", "/state", "-control", "http://benchgrid-1:8080,http://benchgrid-2:8080", "-listen", ":9090", "-endpoint", "http://rig-3:9090"]
+    volumes: ["rig-3:/state"]
+
+volumes:
+  store:
+  rig-1:
+  rig-2:
+  rig-3:

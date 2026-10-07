@@ -1,0 +1,102 @@
+# The control plane on Kubernetes. Only the control plane: rig agents are
+# host processes on the machines they own (see ../systemd), because a rig is
+# scarce hardware with an owner, not capacity for a scheduler to place pods on.
+#
+# Replicas share nothing but Postgres and the artifact store, so any number
+# can run and any can be lost. The store is a ReadWriteMany volume here; in a
+# deployment with object storage it would be a bucket, and nothing in the
+# control plane would change but the store implementation.
+#
+# Postgres is not included. The URL comes from a secret named benchgrid-db,
+# which this file does not create, so no credential is ever committed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchgrid
+  labels:
+    app.kubernetes.io/name: benchgrid
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: benchgrid
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: benchgrid
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+        - name: benchgrid
+          image: benchgrid:local
+          # -id defaults to the hostname, which in a pod is the pod name, so
+          # every attempt records which replica placed it.
+          args: ["-listen", ":8080", "-artifacts", "/store", "-lease-ttl", "5s"]
+          env:
+            - name: BENCHGRID_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: benchgrid-db
+                  key: url
+          ports:
+            - name: http
+              containerPort: 8080
+          # /healthz pings the database, so a replica that has lost Postgres
+          # stops receiving traffic but is not restarted for it: restarting
+          # would not bring the database back.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: store
+              mountPath: /store
+      volumes:
+        - name: store
+          persistentVolumeClaim:
+            claimName: benchgrid-store
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: benchgrid
+  labels:
+    app.kubernetes.io/name: benchgrid
+spec:
+  selector:
+    app.kubernetes.io/name: benchgrid
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: benchgrid-store
+spec:
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 20Gi

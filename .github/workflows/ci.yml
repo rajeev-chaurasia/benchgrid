@@ -68,3 +68,25 @@ jobs:
       - name: Check the manifests with a tool this repository did not write
         run: |
           for d in evidence/results/*/; do (cd "$d" && sha256sum -c --quiet SHA256SUMS); done
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Kubernetes manifests decode strictly and match the binary, with no cluster
+        working-directory: deploy/k8s/validate
+        # The manifests live outside this test module, so the test cache cannot
+        # see them change.
+        run: go test -count=1 ./...
+      - name: The systemd unit verifies against a real binary
+        run: |
+          make build
+          sudo install -m 0755 bin/rigagent /usr/local/bin/rigagent
+          sudo install -d /etc/benchgrid
+          sudo install -m 0644 deploy/systemd/rigagent.env.example /etc/benchgrid/rigagent.env
+          systemd-analyze verify deploy/systemd/rigagent.service
+      - name: The whole stack runs in containers and completes experiments on Linux rigs
+        run: ./script/compose_smoke.sh

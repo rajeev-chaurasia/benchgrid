@@ -1,0 +1,26 @@
+# One per rig, on the rig's own host. Copy the binary to /usr/local/bin and
+# set the environment file before enabling.
+[Unit]
+Description=benchgrid rig agent
+Documentation=https://github.com/rajeev-chaurasia/benchgrid
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/benchgrid/rigagent.env
+ExecStart=/usr/local/bin/rigagent -id ${RIG_ID} -state-dir /var/lib/benchgrid -control ${CONTROL_URLS} -listen ${LISTEN} -endpoint ${ENDPOINT}
+StateDirectory=benchgrid
+# The agent kills its benchmarks by process group and must be the only thing
+# that does. If systemd killed the whole cgroup on stop, a restart would find
+# its benchmarks already gone and record them as having stopped at an unknown
+# time; leaving them lets the next agent reap and time them itself.
+KillMode=process
+Restart=always
+RestartSec=2
+# Root is needed to set the CPU frequency governor. A rig that does not
+# require a governor can run the agent as an unprivileged user instead.
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -198,7 +198,11 @@ func (h *harness) newCluster(ctx context.Context, name string, cfg clusterConfig
 		time.Sleep(100 * time.Millisecond)
 	}
 	c.blobs = map[string]string{}
-	for osName, path := range map[string]string{runtime.GOOS: filepath.Join(h.bin, "benchload"), "linux": filepath.Join(h.scratch, "linux", "benchload")} {
+	// Built up rather than written as a literal, because on a Linux host the
+	// two keys are the same.
+	binaries := map[string]string{"linux": filepath.Join(h.scratch, "linux", "benchload")}
+	binaries[runtime.GOOS] = filepath.Join(h.bin, "benchload")
+	for osName, path := range binaries {
 		b, err := os.ReadFile(path)
 		if err != nil {
 			if osName == "linux" && cfg.linuxImage == "" {
