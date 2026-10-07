@@ -14,15 +14,18 @@ import (
 
 const noiseRuns = 12
 
-// The three conditions differ in one thing each. quiet against loaded_ungated
-// shows what the noise does; loaded_ungated against loaded_gated shows what
-// the gate does about it.
+// Two factors, two levels each. quiet against loaded_ungated shows what the
+// noise does; loaded_ungated against loaded_gated shows what the gate does
+// about it; quiet against quiet_gated shows what the gate costs when there is
+// nothing to catch, which is the false alarm rate that decides whether anyone
+// would leave it switched on.
 var noiseConditions = []struct {
 	name   string
 	stress bool
 	gated  bool
 }{
 	{"quiet", false, false},
+	{"quiet_gated", false, true},
 	{"loaded_ungated", true, false},
 	{"loaded_gated", true, true},
 }
@@ -62,7 +65,7 @@ func (h *harness) noise(ctx context.Context) error {
 				limit := 0.3
 				s.Environment = spec.Environment{MaxCPUUtil: &limit, GateEachIteration: true, PreflightTimeoutSeconds: 20}
 			}
-			id, err := c.submit(s, fmt.Sprintf("noise-%s-%d", cond.name, i))
+			id, err := c.submitOnce(s, fmt.Sprintf("noise-%s-%d", cond.name, i))
 			if err != nil {
 				return err
 			}

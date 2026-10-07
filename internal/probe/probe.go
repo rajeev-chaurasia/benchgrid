@@ -219,3 +219,15 @@ func readNumber(path string) (float64, bool) {
 	v, err := strconv.ParseFloat(strings.TrimSpace(string(b)), 64)
 	return v, err == nil
 }
+
+// BusyCPUSeconds is the total non-idle CPU time across every core since boot.
+// Two readings around an interval, less the time the benchmark itself used,
+// give the background load during that interval, which a reading taken
+// before it cannot.
+func BusyCPUSeconds(ctx context.Context) (float64, bool) {
+	t, err := cpu.TimesWithContext(ctx, false)
+	if err != nil || len(t) != 1 {
+		return 0, false
+	}
+	return t[0].Total() - t[0].Idle - t[0].Iowait, true
+}

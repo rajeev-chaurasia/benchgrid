@@ -188,8 +188,19 @@ func (c *cluster) close() {
 }
 
 func (c *cluster) submit(s spec.Spec, key string) (string, error) {
+	return c.submitWith(s, key, 0)
+}
+
+// submitOnce allows a single attempt. The noise run measures what one
+// attempt produces under each condition; a retry after an INVALID verdict
+// would be a second sample of the noise, counted as if it were the first.
+func (c *cluster) submitOnce(s spec.Spec, key string) (string, error) {
+	return c.submitWith(s, key, 1)
+}
+
+func (c *cluster) submitWith(s spec.Spec, key string, maxAttempts int) (string, error) {
 	s.Artifacts.BinarySHA256 = c.blob
-	body, _ := json.Marshal(map[string]any{"spec": s, "idempotency_key": key})
+	body, _ := json.Marshal(map[string]any{"spec": s, "idempotency_key": key, "max_attempts": maxAttempts})
 	var e struct {
 		ID string `json:"id"`
 	}

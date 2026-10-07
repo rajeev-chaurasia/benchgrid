@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -170,6 +171,7 @@ func (a *Agent) execute(s *session) outcome {
 				return fail(artifact.Invalid, "during:"+field)
 			}
 		}
+		busyBefore, haveBusy := probe.BusyCPUSeconds(ctx)
 		r, err := runIteration(ctx, argv, a.clock, func(pid int) {
 			s.mu.Lock()
 			s.pgid = pid
@@ -196,6 +198,16 @@ func (a *Agent) execute(s *session) outcome {
 		}
 		if r.ExitCode != 0 {
 			return fail(artifact.Failed, "exit:"+strconv.Itoa(r.ExitCode))
+		}
+		if limit := sp.Environment.MaxCPUUtil; limit != nil && sp.Environment.GateEachIteration {
+			busyAfter, ok := probe.BusyCPUSeconds(ctx)
+			if !haveBusy || !ok {
+				return fail(artifact.Invalid, "during:cpu_util_unreadable")
+			}
+			if bg := BackgroundUtil(busyAfter-busyBefore, r.UserNS+r.SysNS, r.WallNS, runtime.NumCPU()); bg > *limit {
+				a.log.Info("iteration measured under background load", "experiment", s.d.ExperimentID, "iteration", i, "background_util", bg)
+				return fail(artifact.Invalid, "during:cpu_util")
+			}
 		}
 		values := map[string]float64{
 			"iteration_latency": float64(r.WallNS),
@@ -263,6 +275,21 @@ func (a *Agent) waitForGate(ctx context.Context, env spec.Environment) (probe.Re
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
+}
+
+// BackgroundUtil is the fraction of the machine's CPU capacity used by
+// anything other than the benchmark while it ran. Clamped at zero, because
+// the system counters and the process's own accounting tick at different
+// resolutions and can disagree by a little in either direction.
+func BackgroundUtil(busyDelta float64, ownNS, wallNS int64, cores int) float64 {
+	if wallNS <= 0 || cores <= 0 {
+		return 0
+	}
+	bg := (busyDelta - float64(ownNS)/1e9) / (float64(wallNS) / 1e9 * float64(cores))
+	if bg < 0 {
+		return 0
+	}
+	return bg
 }
 
 // Gate returns the first threshold the readings violate. A threshold the spec

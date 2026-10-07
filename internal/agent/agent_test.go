@@ -306,3 +306,14 @@ func TestRestartReapsWhatTheLastAgentLeft(t *testing.T) {
 		t.Error("a successful reap quarantined the rig")
 	}
 }
+
+func TestBackgroundUtilSubtractsTheBenchmark(t *testing.T) {
+	// 10 cores for 100 ms is 1 core-second of capacity. 0.3 s busy in total,
+	// of which the benchmark used 0.1 s, leaves 0.2 s of someone else's work.
+	if got := BackgroundUtil(0.3, 100e6, 100e6, 10); got < 0.199 || got > 0.201 {
+		t.Errorf("got %v, want 0.2", got)
+	}
+	if got := BackgroundUtil(0.05, 100e6, 100e6, 10); got != 0 {
+		t.Errorf("counter disagreement must clamp to zero, got %v", got)
+	}
+}

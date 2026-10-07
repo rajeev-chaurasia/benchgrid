@@ -51,9 +51,13 @@ type Environment struct {
 	MaxTempC                *float64 `json:"max_temp_c,omitempty"`
 	MinMemFreeBytes         int64    `json:"min_mem_free_bytes,omitempty"`
 	PreflightTimeoutSeconds int      `json:"preflight_timeout_seconds,omitempty"`
-	// GateEachIteration re-applies the gate before every iteration, not only
-	// before the first. A burst of background load that starts after preflight
-	// is otherwise measured as if it were the code.
+	// GateEachIteration re-applies the gate before every iteration, and also
+	// checks max_cpu_util against the background load measured during each
+	// iteration, excluding the benchmark's own CPU time. Checking only before
+	// was tried first and made results worse under bursty load: a gate that
+	// waits for quiet passes late in each quiet gap, which lines iterations up
+	// with the start of the next burst. Only a measurement taken during the
+	// iteration can say the iteration was clean.
 	GateEachIteration bool `json:"gate_each_iteration,omitempty"`
 }
 
