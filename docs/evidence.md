@@ -53,6 +53,16 @@ The validator requires zero overlapping pairs in the fenced mode, at least one
 stale fence refused in the fenced mode (or the freezes never landed), and at
 least one overlapping pair in the control.
 
+## linux
+
+The fence run again, with six agents running as Linux containers in Docker's
+Linux VM on the same host, built from a scratch image holding only the agent
+and the benchmark. Everything else is identical, including the control. The
+Linux runs also publish their run artifacts, and the validator checks from
+each one that its rig reports Linux and that every `max_rss` sample is a
+plausible number of bytes, which is how a kilobyte figure read as bytes would
+show.
+
 ## chaos
 
 Three replicas, eight agents in four emulated hardware classes, six hundred
@@ -68,6 +78,9 @@ harness applies one fault every one to three seconds:
   seconds while agents keep running.
 
 and every replica answers one artifact write in five with a 503.
+
+Stale dispatches refused during chaos are counted: these come from random
+faults, not aimed ones.
 
 An experiment recovered if it ended in the state its kind should produce:
 `SUCCEEDED` for a sound benchmark, `FAILED` for a broken one, which shows that

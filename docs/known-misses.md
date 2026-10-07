@@ -6,42 +6,58 @@ than it looks, or a way the system can still be wrong.
 ## Every rig is a process on one machine
 
 No physical rig, no embedded board, and no GPU took part in anything in
-`evidence/`. The rigs are agents on one Apple M4 host, which proves the
-scheduling, leasing, and fencing logic, and proves nothing about how a
-benchmark behaves on the hardware an emulated rig imitates. Every run says
-`emulated` where that applies, and the host is recorded in `env.json`.
+`evidence/`. The rigs are agents on one Apple M4 host, as processes or as
+Linux containers in Docker's Linux VM on that host, which proves the
+scheduling, leasing, and fencing logic on both kernels, and proves nothing
+about how a benchmark behaves on the hardware an emulated rig imitates. Every
+run says `emulated` where that applies, and the host is recorded in
+`env.json`.
+
+## The CPU governor has never been set on real hardware
+
+Neither macOS nor Docker's Linux VM exposes cpufreq, so no evidence run has
+ever changed a governor. The logic is tested against a directory laid out as
+the kernel lays out `/sys/devices/system/cpu`, including a read-only file
+standing in for a kernel that refuses, which tests the agent's behaviour and
+not the kernel's.
 
 ## The fence run aims its freezes
 
 Schedulers stop themselves at the one point where a freeze turns into a stale
-dispatch: after committing a lease, before sending it. Freezes at random
-points would land there rarely and the run would mostly measure nothing. The
-cost is that the run shows the fence handles the dangerous case, not how
-often that case arises unaided.
+dispatch: after committing a lease, before sending it. The chaos run's freezes
+and kills land at random and also produce stale dispatches, and its summary
+counts them, so the README shows both the aimed and the unaided rate. The
+unaided count is small, which is the point of aiming.
 
-## Intervals of work interrupted by an agent's death are not recorded
+## An orphan's end time is an upper bound
 
-An agent killed mid-run never writes the end of the interval it was in. Its
-benchmark keeps running, in its own process group, until the next agent on
-that rig starts and kills it. No new work can start on the rig in that gap,
-because there is no agent to accept it, so no overlap can hide there, but the
-gap itself is invisible in the published intervals.
+When an agent dies mid-run, the next agent on the rig kills its benchmark and
+records the interval it ran. If the benchmark had already ended by itself, the
+true end is unknown, and the interval is recorded as ending when the new
+agent started. That can only make an interval longer, and no new work could
+start on the rig while it had no agent, so it cannot hide an overlap; it can
+only make the published intervals pessimistic.
 
-## Process group ids can be reused
+## A launch the agent never recorded quarantines the rig
 
-A restarted agent kills every process group its predecessor recorded and did
-not see finish. If the operating system reused one of those ids for an
-unrelated process group in between, that group is killed. Recording each
-group's start time alongside its id would close this.
+The agent writes a marker before starting a benchmark and replaces it with the
+process group id after. An agent killed between the two leaves a marker with
+no id, and the next agent quarantines the rig rather than guess whether a
+process is loose. That is safe and occasionally inconvenient.
 
-## The control plane can lose the window between start and record
+## Process group ids are checked, not just trusted
 
-A benchmark process is started, and then its group id is written to disk. An
-agent killed between those two steps leaves a group nobody recorded.
+A recorded group whose leader now has a different creation time is assumed
+reused and left alone. If the original leader exited and its group lived on,
+and the operating system then reused the id for a new leader, the old
+group's surviving members would be missed. Both have to happen within one
+agent restart.
 
-## A multi-GPU rig is advertised by its first GPU
+## A multi-GPU rig is described as uniform
 
-`nvidia-smi` is asked about every device and only the first line is used.
+The rig advertises its first device's model, the smallest memory of any
+device, and the count. A rig with two different GPUs can satisfy a spec that
+asks for the larger model only if the first device listed is that model.
 
 ## The noise run is about this machine
 

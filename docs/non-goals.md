@@ -16,18 +16,26 @@ exercises every failure this repository tests, and code generation would add
 a toolchain without adding a test. If the protocol grows streaming, for live
 telemetry during a run, this should be revisited.
 
-## Kubernetes manifests
+## Running rigs on Kubernetes
 
-The control plane is stateless and would run on Kubernetes unchanged, but
-nothing here would test that it does, so no manifest is shipped. Rig agents
-are deliberately not pods: a rig is scarce hardware owned by a host process,
-and scheduling it as capacity is the mistake this design avoids.
+`deploy/k8s` runs the control plane on Kubernetes, and CI checks those
+manifests decode strictly and match the binary's flags. It has never been
+applied to a cluster from this repository, and says so. Rig agents are
+deliberately not pods: a rig is scarce hardware owned by a host process, and
+scheduling it as capacity is the mistake this design avoids. `deploy/systemd`
+is how a rig runs its agent.
 
 ## Real GPU telemetry
 
 There is no GPU on the development machine. The probe parses `nvidia-smi`
-output when present, and that parser is exercised by a hand-written fixture,
-not by hardware. `known-misses.md` says so.
+output for every device when present, and that parser is exercised by
+hand-written fixtures, not by hardware. `known-misses.md` says so.
+
+## BigQuery, and any analysis store
+
+benchgrid writes run artifacts and stops. Where they are loaded for analysis
+is the consumer's choice, and a warehouse client here would be a dependency
+with nothing in this repository to read from it.
 
 ## Deciding whether a change regressed
 

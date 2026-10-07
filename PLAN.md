@@ -37,6 +37,16 @@ than left as first written. The substantive changes:
   interleaved run by run.
 - **The second claim was rewritten** around what the third design can show,
   after it was measured, which is stated in the README rather than hidden.
+- **Refused dispatches spent an experiment's attempts.** In the first Linux
+  fence trial one experiment failed without ever running, because its
+  schedulers froze three times in a row. Only attempts that ran now count,
+  with a cap on all attempts as the backstop.
+- **The README's numbers were typed by hand.** They are now rendered from the
+  evidence, and CI fails if the two disagree.
+- **Several known misses were closed rather than listed:** an orphaned
+  benchmark's lifetime is recorded, reused process group ids are detected, an
+  unrecorded launch quarantines the rig, every GPU is read, and the fence
+  claim is shown on Linux agents as well as host processes.
 - **The first unfenced control showed no overlap at all.** Each new session's
   preflight was killing every process the agent had ever launched, including
   the other session's, which is accidental fencing. Stale process reaping is
