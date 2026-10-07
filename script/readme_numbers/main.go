@@ -161,7 +161,7 @@ func render(dir string) (map[string]string, error) {
 	}
 	b := map[string]string{}
 
-	b["source"] = fmt.Sprintf("From `%s/`, at commit `%s`, on Postgres %s and an %s whose own\n"+
+	b["source"] = fmt.Sprintf("From `%s/`, at commit `%s`, on Postgres %s and an\n%s whose own "+
 		"background load kept %.0f%% of its CPU busy before any run started.\n",
 		filepath.ToSlash(dir), e.GitCommit[:7], e.Postgres, e.CPU, e.IdleCPUBusy*100)
 
@@ -204,19 +204,38 @@ func render(dir string) (map[string]string, error) {
 	fmt.Fprintf(&c, "%d replicas, %d rigs in four emulated hardware classes, %d experiments,\n"+
 		"%d of them built to fail. During the run: %d agents killed and restarted, %d\n"+
 		"replicas killed and restarted, %d replicas frozen, %d outages of the whole\n"+
-		"control plane at once, and one artifact write in five refused. Those random\n"+
-		"faults alone, with nothing aimed, produced %d stale dispatches, every one\n"+
-		"refused at the rig.\n\n",
+		"control plane at once, and one artifact write in five refused. ",
 		chaos.Replicas, chaos.Rigs, chaos.Experiments, chaos.ByKind["crash"]+chaos.ByKind["exit"],
 		chaos.Faults["agent_kill"], chaos.Faults["replica_kill"], chaos.Faults["replica_freeze"],
-		chaos.Faults["control_plane_outage"], chaos.StaleRefused)
+		chaos.Faults["control_plane_outage"])
+	if chaos.StaleRefused == 0 {
+		c.WriteString("Those random\nfaults, with nothing aimed, produced no stale dispatch at all, which is why\nthe fence run has to aim its freezes to test the fence.\n\n")
+	} else {
+		fmt.Fprintf(&c, "Those random\nfaults, with nothing aimed, produced %d stale dispatch%s, every one refused\nat the rig.\n\n", chaos.StaleRefused, map[bool]string{true: "", false: "es"}[chaos.StaleRefused == 1])
+	}
 	c.WriteString("| | |\n| --- | ---: |\n")
 	fmt.Fprintf(&c, "| experiments ending as they should (sound ones succeed, broken ones fail) | %d of %d |\n", chaos.AsExpected, chaos.Experiments)
 	fmt.Fprintf(&c, "| final attempts with a sealed artifact that verifies and agrees with the control plane | %d of %d |\n", chaos.ArtifactsSealed, chaos.Experiments)
 	fmt.Fprintf(&c, "| runs placed on a rig their spec did not allow | %d |\n", chaos.PlacementViolations)
 	fmt.Fprintf(&c, "| overlapping process pairs | %d |\n", chaos.ProcessOverlaps)
 	fmt.Fprintf(&c, "| rigs still leased afterwards | %d |\n", chaos.RigsLeasedAtEnd)
-	fmt.Fprintf(&c, "| experiments needing a second or third attempt | %d and %d |\n", chaos.AttemptsHist["2"], chaos.AttemptsHist["3"])
+	var retried []string
+	var counts []string
+	for k := range chaos.AttemptsHist {
+		if k != "1" {
+			counts = append(counts, k)
+		}
+	}
+	sort.Slice(counts, func(i, j int) bool {
+		return len(counts[i]) < len(counts[j]) || (len(counts[i]) == len(counts[j]) && counts[i] < counts[j])
+	})
+	for _, k := range counts {
+		retried = append(retried, fmt.Sprintf("%d with %s", chaos.AttemptsHist[k], k))
+	}
+	if len(retried) == 0 {
+		retried = []string{"none"}
+	}
+	fmt.Fprintf(&c, "| experiments needing more than one attempt | %s |\n", strings.Join(retried, ", "))
 	b["chaos"] = c.String()
 
 	by := map[string]evidence.NoiseCondition{}
@@ -230,10 +249,15 @@ func render(dir string) (map[string]string, error) {
 		lg.Invalid, lg.Runs, pct(lu.MedianCV), pct(q.MedianCV))
 
 	var n strings.Builder
-	fmt.Fprintf(&n, "%d loaded run%s got through the gate, with a median CV of %s. The gate also\n"+
-		"declined %d of %d runs with no injected load, because the host's own\n"+
-		"background load crossed the limit during them.\n\n",
-		lg.Succeeded, plural(lg.Succeeded), pct(lg.MedianCV), qg.Invalid, qg.Runs)
+	if lg.Succeeded == 0 {
+		n.WriteString("No loaded run got through the gate. ")
+	} else {
+		fmt.Fprintf(&n, "%d loaded run%s got through the gate, with a median CV of %s. ", lg.Succeeded, plural(lg.Succeeded), pct(lg.MedianCV))
+	}
+	fmt.Fprintf(&n, "The gate also declined %d of\n%d runs with no injected load, because the host's own background load,\n"+
+		"%.0f%% of its CPU before the runs began, crossed the limit during them. A\n"+
+		"gate that refuses that often on an idle machine is not one anybody would\nleave switched on here.\n\n",
+		qg.Invalid, qg.Runs, e.IdleCPUBusy*100)
 	n.WriteString("| condition | published | declined | median CV of published | median latency |\n| --- | ---: | ---: | ---: | ---: |\n")
 	for _, row := range []struct {
 		label string

@@ -119,8 +119,9 @@ func (h *harness) environment() Environment {
 		Kernel:     run("uname", "-r"),
 		Postgres:   run("psql", h.pgBase, "-tAc", "SHOW server_version"),
 		StartedUTC: time.Now().UTC().Format(time.RFC3339),
-		Description: "Every rig is a process on this one host. No physical rig and no GPU took " +
-			"part. Rigs are distinguished by agent, not by hardware.",
+		Description: "Every rig is a process on this one host, or a Linux container in Docker's " +
+			"Linux VM on it. No physical rig and no GPU took part. Rigs are distinguished by " +
+			"agent, not by hardware.",
 	}
 	if b0, ok := probe.BusyCPUSeconds(context.Background()); ok {
 		start := time.Now()
