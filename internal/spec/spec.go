@@ -73,8 +73,9 @@ type Environment struct {
 	// RequireIsolation needs the benchmark pinned to CPUs the kernel has
 	// isolated from the scheduler, so nothing else is ever placed on them.
 	RequireIsolation bool `json:"require_isolation,omitempty"`
-	// MaxClockOffsetMS needs the rig's clock synchronized to within this many
-	// milliseconds, so timestamps from different rigs can be lined up.
+	// MaxClockOffsetMS needs the rig's clock within this many milliseconds of
+	// true time, judged by chrony's error bound and not its offset alone, so
+	// timestamps from different rigs can be lined up.
 	MaxClockOffsetMS *float64 `json:"max_clock_offset_ms,omitempty"`
 }
 

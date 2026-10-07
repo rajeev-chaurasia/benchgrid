@@ -198,7 +198,7 @@ func (a *Agent) execute(s *session) outcome {
 		ok := false
 		deadline := time.Now().Add(preflightLimit(sp.Environment))
 		for {
-			if tuning.ClockSynced != nil && *tuning.ClockSynced && tuning.ClockOffsetMS != nil && *tuning.ClockOffsetMS <= *limit {
+			if tuning.ClockSynced != nil && *tuning.ClockSynced && tuning.ClockErrorMS != nil && *tuning.ClockErrorMS <= *limit {
 				ok = true
 				break
 			}

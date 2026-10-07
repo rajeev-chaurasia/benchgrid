@@ -24,7 +24,13 @@ type HostTuning struct {
 	CgroupV2      bool     `json:"cgroup_v2"`
 	ClockSynced   *bool    `json:"clock_synced"`
 	ClockOffsetMS *float64 `json:"clock_offset_ms"`
-	ClockSource   string   `json:"clock_source"`
+	// ClockErrorMS bounds how far the clock can be from true time: the offset
+	// from chrony's reference plus half the round trip to the root and the
+	// root's dispersion. An offset alone says nothing when the reference is
+	// itself unreliable, which is what a clock synced to distant pool servers
+	// through NAT looks like.
+	ClockErrorMS *float64 `json:"clock_error_bound_ms"`
+	ClockSource  string   `json:"clock_source"`
 }
 
 // HostRoots lets the readers run against a directory laid out like /proc and
@@ -75,7 +81,7 @@ func ReadHostTuning(ctx context.Context, roots HostRoots) HostTuning {
 	_, err := os.Stat(filepath.Join(roots.sys(), "fs/cgroup/cgroup.controllers"))
 	t.CgroupV2 = err == nil
 	t.ClockSource = readTrim(filepath.Join(roots.sys(), "devices/system/clocksource/clocksource0/current_clocksource"))
-	t.ClockSynced, t.ClockOffsetMS = clockState(ctx)
+	t.ClockSynced, t.ClockOffsetMS, t.ClockErrorMS = clockState(ctx)
 	return t
 }
 
@@ -109,35 +115,39 @@ func ParseCPUList(s string) []int {
 // GCE and most Linux distributions run chrony; where it is absent the state
 // is unknown, which a spec that requires a synchronized clock treats as a
 // failure.
-func clockState(ctx context.Context) (*bool, *float64) {
+func clockState(ctx context.Context) (*bool, *float64, *float64) {
 	if _, err := exec.LookPath("chronyc"); err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "chronyc", "-c", "tracking").Output()
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	return ParseChronyTracking(string(out))
 }
 
-// ParseChronyTracking reads `chronyc -c tracking`: the fifth field is the
-// system clock's offset from the reference in seconds, and the last is the
-// leap status, which is "Not synchronised" when chrony has no reference.
-func ParseChronyTracking(out string) (*bool, *float64) {
+// ParseChronyTracking reads `chronyc -c tracking`: field 4 is the system
+// clock's offset from the reference, fields 10 and 11 the root delay and root
+// dispersion, all in seconds, and the last is the leap status, which is
+// "Not synchronised" when chrony has no reference.
+func ParseChronyTracking(out string) (synced *bool, offsetMS, errorMS *float64) {
 	f := strings.Split(strings.TrimSpace(out), ",")
 	if len(f) < 14 {
-		return nil, nil
+		return nil, nil, nil
 	}
-	off, err := strconv.ParseFloat(f[4], 64)
-	if err != nil {
-		return nil, nil
+	off, err1 := strconv.ParseFloat(f[4], 64)
+	delay, err2 := strconv.ParseFloat(f[10], 64)
+	disp, err3 := strconv.ParseFloat(f[11], 64)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return nil, nil, nil
 	}
-	synced := !strings.Contains(strings.ToLower(f[len(f)-1]), "not synchronised")
-	ms := off * 1000
-	if ms < 0 {
-		ms = -ms
+	s := !strings.Contains(strings.ToLower(f[len(f)-1]), "not synchronised")
+	if off < 0 {
+		off = -off
 	}
-	return &synced, &ms
+	o := off * 1000
+	e := (off + delay/2 + disp) * 1000
+	return &s, &o, &e
 }

@@ -102,15 +102,26 @@ func TestReadHostTuningFromFakeRoots(t *testing.T) {
 // name, stratum, reference time, system offset in seconds, and so on, ending
 // in the leap status.
 func TestParseChronyTracking(t *testing.T) {
-	synced, off := ParseChronyTracking("A9FEA9FE,169.254.169.254,3,1759860000.123,-0.000012345,0.000001,0.00002,-12.3,0.001,0.02,0.0005,0.0003,64.2,Normal\n")
+	synced, off, bound := ParseChronyTracking("A9FEA9FE,169.254.169.254,3,1759860000.123,-0.000012345,0.000001,0.00002,-12.3,0.001,0.02,0.0005,0.0003,64.2,Normal\n")
 	if synced == nil || !*synced || off == nil || *off < 0.0123 || *off > 0.0124 {
 		t.Errorf("%v %v", synced, off)
 	}
-	synced, _ = ParseChronyTracking("00000000,,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,0.0,Not synchronised\n")
+	// 0.012345 ms offset + 0.25 ms half delay + 0.3 ms dispersion.
+	if bound == nil || *bound < 0.562 || *bound > 0.563 {
+		t.Errorf("error bound %v", bound)
+	}
+	// Captured from a benchgrid rig on GCE whose chrony was syncing to public
+	// pool servers through NAT: a small-looking offset under a huge root
+	// dispersion, which only the error bound exposes.
+	synced, off, bound = ParseChronyTracking("AC681CAF,172.104.28.175,3,1791413683.926132074,0.053211745,-0.046206482,0.046206482,0.000,-2243.897,1000000.000,0.156149998,13.649346352,64.7,Normal\n")
+	if !*synced || *off > 54 || *bound < 13000 {
+		t.Errorf("pool-synced rig: offset %v bound %v", *off, *bound)
+	}
+	synced, _, _ = ParseChronyTracking("00000000,,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,0.0,Not synchronised\n")
 	if synced == nil || *synced {
 		t.Error("an unsynchronised clock read as synchronised")
 	}
-	if s, o := ParseChronyTracking("garbage"); s != nil || o != nil {
+	if s, o, e := ParseChronyTracking("garbage"); s != nil || o != nil || e != nil {
 		t.Error("garbage parsed")
 	}
 }

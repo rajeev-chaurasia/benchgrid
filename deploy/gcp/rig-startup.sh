@@ -25,7 +25,19 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 command -v chronyc >/dev/null || { apt-get update -qq && apt-get install -y -qq chrony; }
-systemctl enable --now chrony || systemctl enable --now chronyd || true
+# Google's metadata server is the time source GCE recommends: a hop away,
+# with no NAT in between. Debian's default pool servers are reached through
+# NAT and were measured, on a rig like this, at 53 ms off with a 13 s root
+# dispersion. makestep lets chrony step rather than slew after boot.
+conf=/etc/chrony/chrony.conf
+[ -f /etc/chrony.conf ] && conf=/etc/chrony.conf
+if ! grep -q "^server metadata.google.internal" "$conf"; then
+  sed -i -e 's/^\(pool .*\)/# \1/' -e 's/^\(server .*\)/# \1/' -e 's/^\(sourcedir .*\)/# \1/' "$conf"
+  printf 'server metadata.google.internal prefer iburst\nmakestep 0.1 3\n' >> "$conf"
+fi
+systemctl enable chrony 2>/dev/null || systemctl enable chronyd 2>/dev/null || true
+systemctl restart chrony 2>/dev/null || systemctl restart chronyd 2>/dev/null || true
+for _ in $(seq 1 30); do chronyc -c tracking 2>/dev/null | grep -q metadata && break; chronyc waitsync 1 0.01 >/dev/null 2>&1 && break; sleep 2; done
 
 if [ "$TUNED" = "true" ]; then
   echo never > /sys/kernel/mm/transparent_hugepage/enabled
