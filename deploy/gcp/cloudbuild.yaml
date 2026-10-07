@@ -22,3 +22,5 @@ steps:
 images: ["${_REPO_IMAGE}:${_TAG}"]
 options:
   machineType: E2_HIGHCPU_8
+  # A build that runs as its own service account must say where its logs go.
+  logging: CLOUD_LOGGING_ONLY

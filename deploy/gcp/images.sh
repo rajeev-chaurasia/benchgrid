@@ -10,6 +10,7 @@ TAG=$(git rev-parse --short=12 HEAD)
 IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPO/benchgrid"
 gc services enable cloudbuild.googleapis.com
 (cd ../.. && gcloud builds submit --project "$PROJECT" --region "$REGION" --config deploy/gcp/cloudbuild.yaml \
+  --service-account "projects/$PROJECT/serviceAccounts/$BUILD_SA" \
   --substitutions "_BUCKET=$BUCKET,_REPO_IMAGE=$IMAGE,_TAG=$TAG" .)
 echo "gs://$BUCKET/bin/$TAG/rigagent" > .agent-url
 echo "$IMAGE:$TAG" > .image

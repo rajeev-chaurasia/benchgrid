@@ -15,4 +15,7 @@ LABELS=app=benchgrid
 # these scripts do can change which cluster kubectl talks to elsewhere.
 KUBECONFIG=${KUBECONFIG_BENCHGRID:-${TMPDIR:-/tmp}/benchgrid-kubeconfig}
 export KUBECONFIG
+BUILD_SA=benchgrid-build@$PROJECT.iam.gserviceaccount.com
+RIG_SA=benchgrid-rig@$PROJECT.iam.gserviceaccount.com
+NODE_SA=benchgrid-node@$PROJECT.iam.gserviceaccount.com
 gc() { gcloud --project "$PROJECT" --quiet "$@"; }

@@ -13,7 +13,7 @@ if ! gc container clusters describe "$CLUSTER" --zone "$ZONE" >/dev/null 2>&1; t
     --network "$NETWORK" --subnetwork "$SUBNET" --enable-ip-alias \
     --cluster-secondary-range-name pods --services-secondary-range-name services \
     --num-nodes 1 --machine-type e2-standard-2 --disk-size 30 \
-    --scopes storage-rw,logging-write,monitoring \
+    --service-account "$NODE_SA" --scopes cloud-platform \
     --labels "$LABELS" --release-channel regular
 fi
 gc container clusters get-credentials "$CLUSTER" --zone "$ZONE"

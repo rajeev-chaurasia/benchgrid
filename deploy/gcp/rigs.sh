@@ -22,7 +22,7 @@ create)
     --machine-type n2-standard-4 --threads-per-core 1 \
     --subnet "$SUBNET" --no-address \
     --image-family debian-12 --image-project debian-cloud --boot-disk-size 20GB --boot-disk-type pd-balanced \
-    --scopes storage-ro,logging-write,monitoring-write \
+    --service-account "$RIG_SA" --scopes cloud-platform \
     --labels "$LABELS,role=rig,tuning=$mode" \
     --metadata "benchgrid-tuned=$tuned,benchgrid-bench-cpus=1,benchgrid-class=$class,benchgrid-control=$(control_url),benchgrid-agent=$(agent_url)" \
     --metadata-from-file startup-script=rig-startup.sh
@@ -34,7 +34,7 @@ gpu)
     --subnet "$SUBNET" --no-address \
     --image-family pytorch-2-9-cu129-ubuntu-2204-nvidia-580 --image-project deeplearning-platform-release \
     --boot-disk-size 80GB --boot-disk-type pd-balanced \
-    --scopes storage-ro,logging-write,monitoring-write \
+    --service-account "$RIG_SA" --scopes cloud-platform \
     --labels "$LABELS,role=rig,tuning=gpu" \
     --metadata "install-nvidia-driver=True,benchgrid-tuned=false,benchgrid-class=gcp-t4,benchgrid-control=$(control_url),benchgrid-agent=$(agent_url)" \
     --metadata-from-file startup-script=rig-startup.sh
