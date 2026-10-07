@@ -321,17 +321,14 @@ func Gate(env spec.Environment, r probe.Readings) (string, bool) {
 	return "", true
 }
 
-// applyGovernor sets the requested governor on every CPU where the kernel
-// allows it, and returns what is actually in force afterwards. It never
-// reports the requested value on faith.
+// applyGovernor sets the requested governor where the kernel allows it and
+// returns what is actually in force afterwards.
 func (a *Agent) applyGovernor(env spec.Environment) string {
-	if env.CPUGovernor != "" {
-		paths, _ := filepath.Glob("/sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor")
-		for _, p := range paths {
-			os.WriteFile(p, []byte(env.CPUGovernor), 0o644)
-		}
+	freq := a.cfg.Prober.CPUFreq
+	if env.CPUGovernor == "" {
+		return freq.Current()
 	}
-	return probe.CurrentGovernor()
+	return freq.Set(env.CPUGovernor)
 }
 
 func (a *Agent) fetchBinary(ctx context.Context, digest string) (string, error) {

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -70,6 +71,7 @@ type Prober struct {
 	Profile *Profile
 	// CPUWindow is how long cpu_util is sampled over. Shorter is noisier.
 	CPUWindow time.Duration
+	CPUFreq   CPUFreq
 }
 
 func (p *Prober) Describe(ctx context.Context, rigID string) capability.Rig {
@@ -95,7 +97,7 @@ func (p *Prober) Describe(ctx context.Context, rigID string) capability.Rig {
 		r.GPUVendor, r.GPUModel, r.DriverVersion = "nvidia", g.Name, g.Driver
 		r.GPUMemoryBytes, r.GPUCount = g.MemoryTotalBytes, g.Count
 	}
-	r.Governors = availableGovernors()
+	r.Governors = p.CPUFreq.Available()
 
 	if pr := p.Profile; pr != nil {
 		r.Emulated = true
@@ -180,24 +182,65 @@ func detectProfilers() []string {
 	return found
 }
 
-const governorPath = "/sys/devices/system/cpu/cpu0/cpufreq/"
+// CPUFreq reads and sets the kernel's cpufreq governor under Root, which is
+// /sys/devices/system/cpu on a real Linux rig. It is a type rather than a
+// constant path so the logic can be exercised against a directory tree on any
+// machine, including ones whose kernel exposes no cpufreq at all, which is
+// every machine this repository's evidence ran on.
+type CPUFreq struct{ Root string }
 
-func availableGovernors() []string {
-	b, err := os.ReadFile(governorPath + "scaling_available_governors")
+const DefaultCPUFreqRoot = "/sys/devices/system/cpu"
+
+func (c CPUFreq) root() string {
+	if c.Root == "" {
+		return DefaultCPUFreqRoot
+	}
+	return c.Root
+}
+
+func (c CPUFreq) Available() []string {
+	b, err := os.ReadFile(filepath.Join(c.root(), "cpu0", "cpufreq", "scaling_available_governors"))
 	if err != nil {
 		return []string{}
 	}
 	return strings.Fields(string(b))
 }
 
-// CurrentGovernor is empty where the kernel exposes no cpufreq, which includes
-// macOS and most containers.
-func CurrentGovernor() string {
-	b, err := os.ReadFile(governorPath + "scaling_governor")
+// Current is empty where the kernel exposes no cpufreq, which includes macOS
+// and most containers.
+func (c CPUFreq) Current() string {
+	b, err := os.ReadFile(filepath.Join(c.root(), "cpu0", "cpufreq", "scaling_governor"))
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(b))
+}
+
+// Set asks for gov on every CPU and reports what is in force afterwards, on
+// every CPU, never the requested value on faith. If any CPU disagrees with
+// cpu0 the result is "mixed", which no spec can require.
+func (c CPUFreq) Set(gov string) string {
+	paths, _ := filepath.Glob(filepath.Join(c.root(), "cpu[0-9]*", "cpufreq", "scaling_governor"))
+	if len(paths) == 0 {
+		return ""
+	}
+	for _, p := range paths {
+		os.WriteFile(p, []byte(gov), 0o644)
+	}
+	first := ""
+	for i, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return "mixed"
+		}
+		g := strings.TrimSpace(string(b))
+		if i == 0 {
+			first = g
+		} else if g != first {
+			return "mixed"
+		}
+	}
+	return first
 }
 
 func hottestSensor(ctx context.Context) (float64, bool) {

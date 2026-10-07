@@ -372,3 +372,58 @@ func TestBackgroundUtilSubtractsTheBenchmark(t *testing.T) {
 		t.Errorf("counter disagreement must clamp to zero, got %v", got)
 	}
 }
+
+// fakeCPUFreq lays out the cpufreq files a Linux kernel exposes, because no
+// machine this repository's evidence ran on has them.
+func fakeCPUFreq(t *testing.T, cpus int, current string, writable bool) string {
+	t.Helper()
+	root := t.TempDir()
+	for i := 0; i < cpus; i++ {
+		d := filepath.Join(root, fmt.Sprintf("cpu%d", i), "cpufreq")
+		os.MkdirAll(d, 0o755)
+		os.WriteFile(filepath.Join(d, "scaling_available_governors"), []byte("performance powersave\n"), 0o444)
+		mode := os.FileMode(0o644)
+		if !writable {
+			mode = 0o444
+		}
+		os.WriteFile(filepath.Join(d, "scaling_governor"), []byte(current+"\n"), mode)
+	}
+	return root
+}
+
+func TestGovernorIsSetAndRecordedAsFound(t *testing.T) {
+	root := fakeCPUFreq(t, 4, "powersave", true)
+	a, _ := newAgent(t, true, &probe.Profile{})
+	a.cfg.Prober.CPUFreq = probe.CPUFreq{Root: root}
+	a.descriptor = a.describe(context.Background())
+	sp := testSpec("-rounds", "10")
+	sp.Environment = spec.Environment{CPUGovernor: "performance", GovernorRequired: true}
+	a.Accept(dispatch("exp_gov", 1, 1, sp))
+	if st := waitDone(t, a, "exp_gov", 1); st.Status != artifact.Succeeded {
+		t.Fatalf("%+v", st)
+	}
+	run, _, err := artifact.Verify(artifact.AttemptDir(filepath.Join(a.cfg.StateDir, "runs"), "exp_gov", 1))
+	if err != nil || run.Environment.Governor != "performance" {
+		t.Errorf("governor %q %v", run.Environment.Governor, err)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "cpu3", "cpufreq", "scaling_governor"))
+	if string(b) != "performance" {
+		t.Errorf("cpu3 not set: %q", b)
+	}
+}
+
+func TestGovernorTheKernelRefusesInvalidatesARequiredRun(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file modes, so a read-only file cannot stand in for a refusing kernel")
+	}
+	root := fakeCPUFreq(t, 2, "powersave", false)
+	a, _ := newAgent(t, true, &probe.Profile{})
+	a.cfg.Prober.CPUFreq = probe.CPUFreq{Root: root}
+	a.descriptor = a.describe(context.Background())
+	sp := testSpec("-rounds", "10")
+	sp.Environment = spec.Environment{CPUGovernor: "performance", GovernorRequired: true}
+	a.Accept(dispatch("exp_gov2", 1, 1, sp))
+	if st := waitDone(t, a, "exp_gov2", 1); st.Status != artifact.Invalid || st.StatusReason != "preflight:governor" {
+		t.Errorf("%+v", st)
+	}
+}

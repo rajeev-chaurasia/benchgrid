@@ -58,3 +58,18 @@ func TestParseNvidiaEveryDevice(t *testing.T) {
 		t.Errorf("%+v", g)
 	}
 }
+
+func TestCPUFreqReportsMixed(t *testing.T) {
+	root := t.TempDir()
+	for i, g := range []string{"performance", "powersave"} {
+		d := filepath.Join(root, "cpu"+string(rune('0'+i)), "cpufreq")
+		os.MkdirAll(d, 0o755)
+		os.WriteFile(filepath.Join(d, "scaling_governor"), []byte(g), 0o444)
+	}
+	if got := (CPUFreq{Root: root}).Set("performance"); got != "mixed" && os.Geteuid() != 0 {
+		t.Errorf("got %q", got)
+	}
+	if got := (CPUFreq{Root: t.TempDir()}).Set("performance"); got != "" {
+		t.Errorf("no cpufreq must read as empty, got %q", got)
+	}
+}
