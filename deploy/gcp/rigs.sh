@@ -29,15 +29,23 @@ create)
     --metadata-from-file startup-script=rig-startup.sh
   ;;
 gpu)
-  gc compute instances create benchgrid-rig-gpu-0 --zone "$ZONE" \
-    --machine-type n1-standard-4 --accelerator type=nvidia-tesla-t4,count=1 \
+  # GPU=t4 is an n1-standard-4 with a T4 attached; GPU=l4 is a g2-standard-4,
+  # which comes with its L4. Both use the deep learning image, which carries
+  # the driver and PyTorch.
+  case "${GPU:-t4}" in
+    t4) machine=(--machine-type n1-standard-4 --accelerator type=nvidia-tesla-t4,count=1) class=gcp-t4 ;;
+    l4) machine=(--machine-type g2-standard-4) class=gcp-l4 ;;
+    *) echo "GPU must be t4 or l4" >&2; exit 2 ;;
+  esac
+  gc compute instances create benchgrid-rig-gpu-0 --zone "${GPU_ZONE:-$ZONE}" \
+    "${machine[@]}" \
     --maintenance-policy TERMINATE \
     --subnet "$SUBNET" --no-address \
     --image-family pytorch-2-9-cu129-ubuntu-2204-nvidia-580 --image-project deeplearning-platform-release \
-    --boot-disk-size 80GB --boot-disk-type pd-balanced \
+    --boot-disk-size 100GB --boot-disk-type pd-balanced \
     --service-account "$RIG_SA" --scopes cloud-platform \
     --labels "$LABELS,role=rig,tuning=gpu" \
-    --metadata "install-nvidia-driver=True,benchgrid-tuned=false,benchgrid-class=gcp-t4,benchgrid-control=$(control_url),benchgrid-agent=$(agent_url)" \
+    --metadata "install-nvidia-driver=True,benchgrid-tuned=false,benchgrid-class=$class,benchgrid-control=$(control_url),benchgrid-agent=$(agent_url)" \
     --metadata-from-file startup-script=rig-startup.sh
   ;;
 *)

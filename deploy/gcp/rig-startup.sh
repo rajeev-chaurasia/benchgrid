@@ -56,7 +56,7 @@ fi
 # On a GPU node the driver may still be installing on first boot. The agent
 # describes its hardware once, at start, so it must not start before
 # nvidia-smi can see the GPU, or it would advertise a rig with no GPU.
-if [ "$CLASS" = "gcp-t4" ]; then
+if [ "${CLASS#gcp-}" != "$CLASS" ]; then
   for _ in $(seq 1 120); do nvidia-smi >/dev/null 2>&1 && break; sleep 5; done
 fi
 
