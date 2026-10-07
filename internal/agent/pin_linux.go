@@ -23,18 +23,21 @@ func PinMain(args []string) error {
 	if err != nil {
 		return err
 	}
+	// The cgroup comes first. The shim starts in the agent's cgroup, whose
+	// cpuset excludes the bench CPUs, and the kernel refuses an affinity
+	// outside the current cpuset with EINVAL, so pinning before moving fails.
+	if cgroup != "" {
+		if err := os.WriteFile(filepath.Join(cgroup, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+			return fmt.Errorf("pin: join %s: %w", cgroup, err)
+		}
+	}
 	var set unix.CPUSet
 	set.Zero()
 	for _, c := range cpus {
 		set.Set(c)
 	}
 	if err := unix.SchedSetaffinity(0, &set); err != nil {
-		return fmt.Errorf("pin: %w", err)
-	}
-	if cgroup != "" {
-		if err := os.WriteFile(filepath.Join(cgroup, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
-			return fmt.Errorf("pin: join %s: %w", cgroup, err)
-		}
+		return fmt.Errorf("pin: affinity %v: %w", cpus, err)
 	}
 	path, err := exec.LookPath(argv[0])
 	if err != nil {
