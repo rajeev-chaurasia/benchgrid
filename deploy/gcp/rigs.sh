@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # rigs.sh create COUNT tuned|default [FIRST_INDEX]
 # rigs.sh gpu
-# Bench nodes are n2-standard-4 with one thread per core, which is two
-# physical cores: CPU 0 for the system and the agent, CPU 1 for benchmarks.
+# Bench nodes have four vCPUs with one thread per core, which is two physical
+# cores: CPU 0 for the system and the agent, CPU 1 for benchmarks.
 # With SMT on, an "isolated" vCPU would share a core with everything else.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -14,12 +14,13 @@ agent_url() { cat .agent-url 2>/dev/null || { echo "run ./images.sh first" >&2; 
 case "${1:-}" in
 create)
   count=$2 mode=$3 first=${4:-0}
-  tuned=false class=n2-default
-  [ "$mode" = tuned ] && tuned=true class=n2-isolated
+  family=${RIG_MACHINE%%-*}
+  tuned=false class=$family-default
+  [ "$mode" = tuned ] && tuned=true class=$family-isolated
   names=()
   for i in $(seq "$first" $((first + count - 1))); do names+=("benchgrid-rig-$mode-$i"); done
-  gc compute instances create "${names[@]}" --zone "$ZONE" \
-    --machine-type n2-standard-4 --threads-per-core 1 \
+  gc compute instances create "${names[@]}" --zone "$RIG_ZONE" \
+    --machine-type "$RIG_MACHINE" --threads-per-core 1 \
     --subnet "$SUBNET" --no-address \
     --image-family debian-12 --image-project debian-cloud --boot-disk-size 20GB --boot-disk-type pd-balanced \
     --service-account "$RIG_SA" --scopes cloud-platform \

@@ -18,6 +18,10 @@ import (
 	"github.com/rajeev-chaurasia/benchgrid/internal/agent"
 	"github.com/rajeev-chaurasia/benchgrid/internal/probe"
 	"github.com/rajeev-chaurasia/benchgrid/internal/telemetry"
+	// The images are built from scratch, with no CA bundle, so the binary
+	// carries its own roots for TLS to Cloud Storage and to OTLP collectors.
+	// They are used only when the system has none.
+	_ "golang.org/x/crypto/x509roots/fallback"
 )
 
 func main() {

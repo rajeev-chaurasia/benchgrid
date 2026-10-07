@@ -4,6 +4,13 @@
 : "${PROJECT:?set PROJECT to the GCP project id}"
 REGION=${REGION:-us-west1}
 ZONE=${ZONE:-us-west1-b}
+# Bench nodes may need a different zone from the cluster when a zone runs out
+# of a machine type; the VPC spans the region, so they reach it either way.
+RIG_ZONE=${RIG_ZONE:-$ZONE}
+# n2d (AMD) rather than n2 (Intel) because n2 was out of capacity in every
+# us-west1 zone when the evidence was produced. Either works: what matters is
+# one thread per core, so an isolated CPU is a whole physical core.
+RIG_MACHINE=${RIG_MACHINE:-n2d-standard-4}
 NETWORK=${NETWORK:-benchgrid}
 SUBNET=${SUBNET:-benchgrid-west}
 CLUSTER=${CLUSTER:-benchgrid}
