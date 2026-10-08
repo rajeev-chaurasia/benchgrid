@@ -215,9 +215,11 @@ def scale(a: argparse.Namespace) -> int:
     profiles = a.profiles.split(",")
 
     def submit(i: int) -> str:
+        # Any Linux bench node may take any job: this run measures the
+        # control plane and the fleet, not one class of rig.
         profile = profiles[i % len(profiles)]
-        cls = (TUNED, DEFAULT)[i % 2]
-        spec = avbench_spec(profile, a.revision, cls, 0, a.reps, cls == TUNED)
+        spec = avbench_spec(profile, a.revision, TUNED, 0, a.reps, False)
+        spec["requirements"] = {"os": "linux"}
         spec["artifacts"]["binary_sha256"] = sha
         return client.submit(spec, f"scale-{a.tag}-{i}")
 
