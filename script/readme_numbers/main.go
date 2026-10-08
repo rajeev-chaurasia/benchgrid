@@ -45,8 +45,8 @@ func main() {
 	}
 	// Results from the GCP fleet live in their own directory, named with a
 	// -gcp suffix, and add their own blocks when there are any.
-	if gdir, err := latest("evidence/results", true); err == nil {
-		g, err := renderGCP(gdir)
+	if gdirs := allDirs("evidence/results", true); len(gdirs) > 0 {
+		g, err := renderGCP(gdirs)
 		if err != nil {
 			die(err)
 		}
@@ -77,6 +77,21 @@ func main() {
 func die(err error) {
 	fmt.Fprintln(os.Stderr, "readme_numbers:", err)
 	os.Exit(1)
+}
+
+func allDirs(root string, gcp bool) []string {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	var dirs []string
+	for _, e := range entries {
+		if e.IsDir() && strings.HasSuffix(e.Name(), "-gcp") == gcp {
+			dirs = append(dirs, filepath.Join(root, e.Name()))
+		}
+	}
+	sort.Strings(dirs)
+	return dirs
 }
 
 func latest(root string, gcp bool) (string, error) {
@@ -406,6 +421,9 @@ type gcpEnv struct {
 	GPU          string   `json:"gpu"`
 	ControlPlane string   `json:"control_plane"`
 	Notes        []string `json:"notes"`
+	// Fleet describes the bench nodes in words when the tuned and default
+	// counts do not, as for a fleet of tuned and stock nodes in two regions.
+	Fleet string `json:"fleet"`
 }
 
 func secs(v *float64) string {
@@ -418,82 +436,56 @@ func secs(v *float64) string {
 // renderGCP renders whichever GCP studies the directory holds. A study that
 // has not been run yet has no file and no block, and the README carries no
 // block for it either, which splice enforces.
-func renderGCP(dir string) (map[string]string, error) {
+func renderGCP(dirs []string) (map[string]string, error) {
 	b := map[string]string{}
-	var e gcpEnv
-	if err := evidence.ReadJSON(filepath.Join(dir, "env.json"), &e); err != nil {
-		return nil, err
+	// Each study is read from the newest results directory that has it, so a
+	// later directory adds studies without hiding the earlier ones.
+	find := func(rel string) string {
+		for i := len(dirs) - 1; i >= 0; i-- {
+			if _, err := os.Stat(filepath.Join(dirs[i], rel)); err == nil {
+				return filepath.Join(dirs[i], rel)
+			}
+		}
+		return filepath.Join(dirs[len(dirs)-1], rel)
 	}
-	b["gcp_source"] = fmt.Sprintf("From `%s/`, at commit `%s`: %d tuned and %d default `%s` bench nodes\n"+
-		"(%s, kernel %s) in %s, with the control plane on %s.\n",
-		filepath.ToSlash(dir), e.GitCommit[:7], e.TunedRigs, e.DefaultRigs, e.RigMachine, e.CPUModel, e.Kernel, e.Zone, e.ControlPlane)
+	var src strings.Builder
+	for _, dir := range dirs {
+		var e gcpEnv
+		if err := evidence.ReadJSON(filepath.Join(dir, "env.json"), &e); err != nil {
+			return nil, err
+		}
+		fleet := fmt.Sprintf("%d tuned and %d default", e.TunedRigs, e.DefaultRigs)
+		if e.Fleet != "" {
+			fleet = e.Fleet
+		}
+		fmt.Fprintf(&src, "- `%s/`, published at commit `%s`: %s bench nodes (%s, %s,\n  kernel %s), control plane on %s.\n",
+			filepath.ToSlash(dir), e.GitCommit[:7], fleet, e.RigMachine, e.CPUModel, e.Kernel, e.ControlPlane)
+	}
+	b["gcp_source"] = src.String()
 
 	var g gateSummary
-	if err := evidence.ReadJSON(filepath.Join(dir, "gate", "summary.json"), &g); err == nil {
-		var t strings.Builder
-		fmt.Fprintf(&t, "%d comparisons over the 30 avbench profiles on tuned nodes: %d null, where\n"+
-			"baseline and candidate are the same binary, and %d with an injected slowdown.\n"+
-			"%s runs, %d of them reruns of a run noisier than 5%%; %d of %d pairs ran on\n"+
-			"one rig.\n\n", g.Comparisons, g.NullComparisons, g.InjectedComparisons, comma(g.Runs), g.Reruns, g.PairsOnOneRig, g.Pairs)
-		t.WriteString("| comparison | comparisons | REGRESSION | PASS | INCONCLUSIVE | other |\n| --- | ---: | ---: | ---: | ---: | ---: |\n")
-		keys := make([]string, 0, len(g.BySize))
-		for k := range g.BySize {
-			keys = append(keys, k)
-		}
-		sort.Slice(keys, func(i, j int) bool {
-			if keys[i] == "null" || keys[j] == "null" {
-				return keys[i] == "null"
-			}
-			var a, c float64
-			fmt.Sscanf(keys[i], "%f", &a)
-			fmt.Sscanf(keys[j], "%f", &c)
-			return a < c
-		})
-		for _, k := range keys {
-			v := g.BySize[k]
-			total := 0
-			for _, n := range v {
-				total += n
-			}
-			other := total - v["REGRESSION"] - v["PASS"] - v["INCONCLUSIVE"]
-			label := "injected " + k
-			if k == "null" {
-				label = "null (no change)"
-			}
-			fmt.Fprintf(&t, "| %s | %d | %d | %d | %d | %d |\n", label, total, v["REGRESSION"], v["PASS"], v["INCONCLUSIVE"], other)
-		}
-		fmt.Fprintf(&t, "\nOn the null comparisons, %d of %d were called a regression: a false alarm rate\nof %.1f%%. Of the injected ones, %d of %d were caught.\n",
-			g.FalseAlarms, g.NullComparisons, 100*float64(g.FalseAlarms)/float64(max(1, g.NullComparisons)), g.InjectedCaught, g.InjectedComparisons)
-		b["gcp_gate"] = t.String()
+	if err := evidence.ReadJSON(find("gate/summary.json"), &g); err == nil {
+		b["gcp_gate"] = renderGate(g)
 	}
-
 	var iso isoSummary
-	if err := evidence.ReadJSON(filepath.Join(dir, "isolation", "summary.json"), &iso); err == nil {
-		var t strings.Builder
-		t.WriteString("| nodes | noise on the system core | runs | not succeeded | median of per-profile median CV |\n| --- | --- | ---: | ---: | ---: |\n")
-		for _, cls := range []string{"n2d-isolated", "n2d-default"} {
-			for _, cond := range []string{"quiet", "noise"} {
-				c := iso.Cells[cls+"/"+cond]
-				label := map[string]string{"n2d-isolated": "tuned", "n2d-default": "default"}[cls]
-				fmt.Fprintf(&t, "| %s | %s | %d | %d | %s |\n", label, map[string]string{"quiet": "off", "noise": "on"}[cond], c.Runs, c.NotSucceeded, pct(c.MedianCV))
-			}
-		}
-		t.WriteString("\n| rig | tuning | median CV, noise off | p90 CV, noise off | median CV, noise on | p90 CV, noise on |\n| --- | --- | ---: | ---: | ---: | ---: |\n")
-		names := make([]string, 0, len(iso.PerRig))
-		for n := range iso.PerRig {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		for _, n := range names {
-			r := iso.PerRig[n]
-			label := map[string]string{"n2d-isolated": "tuned", "n2d-default": "default"}[r.Class]
-			fmt.Fprintf(&t, "| %s | %s | %s | %s | %s | %s |\n", n, label, pct(r.Quiet.MedianCV), pct(r.Quiet.P90CV), pct(r.Noise.MedianCV), pct(r.Noise.P90CV))
-		}
-		b["gcp_isolation"] = t.String()
+	if err := evidence.ReadJSON(find("isolation/summary.json"), &iso); err == nil {
+		b["gcp_isolation"] = renderIsolation(iso)
+	}
+	var tun isoSummary
+	if err := evidence.ReadJSON(find("tuning/summary.json"), &tun); err == nil {
+		b["gcp_tuning"] = renderIsolation(tun)
+	}
+	var hil hilSummary
+	if err := evidence.ReadJSON(find("hil/summary.json"), &hil); err == nil {
+		b["gcp_hil"] = renderHIL(hil)
+	}
+	var gs gateSummary
+	if err := evidence.ReadJSON(find("gate_strict/summary.json"), &gs); err == nil {
+		b["gcp_gate_strict"] = renderGate(gs)
 	}
 
 	var sc scaleSummary
-	if err := evidence.ReadJSON(filepath.Join(dir, "scale", "summary.json"), &sc); err == nil {
+	if err := evidence.ReadJSON(find("scale/summary.json"), &sc); err == nil {
 		var t strings.Builder
 		states := make([]string, 0, len(sc.States))
 		for k, v := range sc.States {
@@ -514,7 +506,7 @@ func renderGCP(dir string) (map[string]string, error) {
 		b["gcp_scale"] = t.String()
 	}
 	var cn canarySummary
-	if err := evidence.ReadJSON(filepath.Join(dir, "canary", "summary.json"), &cn); err == nil {
+	if err := evidence.ReadJSON(find("canary/summary.json"), &cn); err == nil {
 		var t strings.Builder
 		fmt.Fprintf(&t, "| rig | canary CV, median and range | jobs placed with `max_rig_noise_cv` %.0f%% | jobs placed with no limit |\n| --- | --- | ---: | ---: |\n", cn.Limit*100)
 		rigs := map[string]bool{}
@@ -547,7 +539,7 @@ func renderGCP(dir string) (map[string]string, error) {
 	}
 
 	var gp gpuSummary
-	if err := evidence.ReadJSON(filepath.Join(dir, "gpu", "summary.json"), &gp); err == nil {
+	if err := evidence.ReadJSON(find("gpu/summary.json"), &gp); err == nil {
 		var t strings.Builder
 		fmt.Fprintf(&t, "On a real %s, not emulated. Before each run the agent read the GPU's\n"+
 			"temperature at %s and its utilization at %s through nvidia-smi, and would\n"+
@@ -583,8 +575,8 @@ func renderGCP(dir string) (map[string]string, error) {
 		Already       int      `json:"already_present"`
 		Corrupt       []string `json:"corrupt"`
 	}
-	if evidence.ReadJSON(filepath.Join(dir, "bigquery", "totals.json"), &totals) == nil && len(totals) == 1 &&
-		evidence.ReadJSON(filepath.Join(dir, "bigquery", "export_report.json"), &report) == nil {
+	if evidence.ReadJSON(find("bigquery/totals.json"), &totals) == nil && len(totals) == 1 &&
+		evidence.ReadJSON(find("bigquery/export_report.json"), &report) == nil {
 		t := totals[0]
 		b["gcp_bigquery"] = fmt.Sprintf("The tables hold %s runs, %s of them succeeded, from %s rigs across %s\n"+
 			"benchmarks. The last export verified every attempt against its manifest\n"+
@@ -592,4 +584,124 @@ func renderGCP(dir string) (map[string]string, error) {
 			"are in `bigquery/`.\n", t["runs"], t["succeeded"], t["rigs"], t["benchmarks"], len(report.Corrupt))
 	}
 	return b, nil
+}
+
+func renderGate(g gateSummary) string {
+	var t strings.Builder
+	fmt.Fprintf(&t, "%d comparisons over the 30 avbench profiles on tuned nodes: %d null, where\n"+
+		"baseline and candidate are the same binary, and %d with an injected slowdown.\n"+
+		"%s runs, %d of them reruns of a run noisier than 5%%; %d of %d pairs ran on\n"+
+		"one rig.\n\n", g.Comparisons, g.NullComparisons, g.InjectedComparisons, comma(g.Runs), g.Reruns, g.PairsOnOneRig, g.Pairs)
+	t.WriteString("| comparison | comparisons | REGRESSION | PASS | INCONCLUSIVE | other |\n| --- | ---: | ---: | ---: | ---: | ---: |\n")
+	keys := make([]string, 0, len(g.BySize))
+	for k := range g.BySize {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i] == "null" || keys[j] == "null" {
+			return keys[i] == "null"
+		}
+		var a, c float64
+		fmt.Sscanf(keys[i], "%f", &a)
+		fmt.Sscanf(keys[j], "%f", &c)
+		return a < c
+	})
+	for _, k := range keys {
+		v := g.BySize[k]
+		total := 0
+		for _, n := range v {
+			total += n
+		}
+		other := total - v["REGRESSION"] - v["PASS"] - v["INCONCLUSIVE"]
+		label := "injected " + k
+		if k == "null" {
+			label = "null (no change)"
+		}
+		fmt.Fprintf(&t, "| %s | %d | %d | %d | %d | %d |\n", label, total, v["REGRESSION"], v["PASS"], v["INCONCLUSIVE"], other)
+	}
+	fmt.Fprintf(&t, "\nOn the null comparisons, %d of %d were called a regression: a false alarm rate\nof %.1f%%. Of the injected ones, %d of %d were caught.\n",
+		g.FalseAlarms, g.NullComparisons, 100*float64(g.FalseAlarms)/float64(max(1, g.NullComparisons)), g.InjectedCaught, g.InjectedComparisons)
+	return t.String()
+}
+
+var classLabel = map[string]string{
+	"n2d-isolated": "tuned: SMT off, isolated core, pinned",
+	"n2d-default":  "SMT off, nothing isolated",
+	"n2d-stock":    "stock: SMT on, nothing isolated",
+}
+
+func renderIsolation(iso isoSummary) string {
+	var t strings.Builder
+	t.WriteString("| nodes | noise on the system core | runs | not succeeded | median of per-profile median CV |\n| --- | --- | ---: | ---: | ---: |\n")
+	for _, k := range cellOrder(iso.Cells) {
+		c := iso.Cells[k]
+		cls, cond, _ := strings.Cut(k, "/")
+		fmt.Fprintf(&t, "| %s | %s | %d | %d | %s |\n", classLabel[cls], map[string]string{"quiet": "off", "noise": "on"}[cond], c.Runs, c.NotSucceeded, pct(c.MedianCV))
+	}
+	t.WriteString("\n| rig | class | median CV, noise off | p90 CV, noise off | median CV, noise on | p90 CV, noise on |\n| --- | --- | ---: | ---: | ---: | ---: |\n")
+	names := make([]string, 0, len(iso.PerRig))
+	for n := range iso.PerRig {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		r := iso.PerRig[n]
+		fmt.Fprintf(&t, "| %s | %s | %s | %s | %s | %s |\n", n, strings.SplitN(classLabel[r.Class], ":", 2)[0], pct(r.Quiet.MedianCV), pct(r.Quiet.P90CV), pct(r.Noise.MedianCV), pct(r.Noise.P90CV))
+	}
+	return t.String()
+}
+
+type hilSummary struct {
+	HZ       float64 `json:"hz"`
+	Cycles   int     `json:"cycles_per_session"`
+	PeriodMS float64 `json:"period_ms"`
+	Cells    map[string]struct {
+		Runs        int      `json:"runs"`
+		Failed      int      `json:"not_succeeded"`
+		TotalCycles int      `json:"cycles"`
+		Misses      int      `json:"deadline_misses"`
+		MissRate    *float64 `json:"miss_rate"`
+		CycleP50    *float64 `json:"median_cycle_p50_ms"`
+		CycleP99    *float64 `json:"median_cycle_p99_ms"`
+		JitterP99   *float64 `json:"median_jitter_p99_ms"`
+		WorstJitter *float64 `json:"worst_jitter_ms"`
+	} `json:"cells"`
+}
+
+func msOf(v *float64) string {
+	if v == nil {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.2f ms", *v)
+}
+
+func renderHIL(h hilSummary) string {
+	var t strings.Builder
+	fmt.Fprintf(&t, "A simulated sensor at %.0f Hz (a %.0f ms budget per cycle), %d cycles per session.\n\n", h.HZ, h.PeriodMS, h.Cycles)
+	t.WriteString("| nodes | noise | cycles | deadline misses | cycle p50 | cycle p99 | wake-up jitter p99 | worst wake-up jitter |\n| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	for _, k := range cellOrder(h.Cells) {
+		c := h.Cells[k]
+		cls, cond, _ := strings.Cut(k, "/")
+		fmt.Fprintf(&t, "| %s | %s | %s | %d | %s | %s | %s | %s |\n", strings.SplitN(classLabel[cls], ":", 2)[0], map[string]string{"quiet": "off", "noise": "on"}[cond],
+			comma(c.TotalCycles), c.Misses, msOf(c.CycleP50), msOf(c.CycleP99), msOf(c.JitterP99), msOf(c.WorstJitter))
+	}
+	return t.String()
+}
+
+// cellOrder lists "class/condition" keys by class, with the quiet condition
+// before the noisy one, which is the order a reader compares them in.
+func cellOrder[V any](cells map[string]V) []string {
+	keys := make([]string, 0, len(cells))
+	for k := range cells {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		ci, ni, _ := strings.Cut(keys[i], "/")
+		cj, nj, _ := strings.Cut(keys[j], "/")
+		if ci != cj {
+			return ci < cj
+		}
+		return ni == "quiet" && nj != "quiet"
+	})
+	return keys
 }

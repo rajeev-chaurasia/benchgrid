@@ -125,8 +125,8 @@ publishes every run it caused, and `benchgrid-study validate` recomputes its
 numbers from them in CI.
 
 <!-- evidence:gcp_source -->
-From `evidence/results/20261008T020541Z-gcp/`, at commit `a76802c`: 3 tuned and 1 default `n2d-standard-4, one thread per core` bench nodes
-(AMD EPYC 7B13, kernel 6.1.0-53-cloud-amd64) in us-west1-b, with the control plane on GKE 1.35.8-gke.1225000, two replicas, Postgres 16 in cluster.
+- `evidence/results/20261008T020541Z-gcp/`, published at commit `a76802c`: 3 tuned and 1 default bench nodes (n2d-standard-4, one thread per core, AMD EPYC 7B13,
+  kernel 6.1.0-53-cloud-amd64), control plane on GKE 1.35.8-gke.1225000, two replicas, Postgres 16 in cluster.
 <!-- /evidence:gcp_source -->
 
 **The CI gate.** `benchgrid-gate` runs baseline and candidate in pairs,
@@ -179,14 +179,14 @@ core 0 is switched on and off for the whole fleet, alternating per profile.
 <!-- evidence:gcp_isolation -->
 | nodes | noise on the system core | runs | not succeeded | median of per-profile median CV |
 | --- | --- | ---: | ---: | ---: |
-| tuned | off | 120 | 0 | 0.9% |
-| tuned | on | 120 | 0 | 1.0% |
-| default | off | 120 | 0 | 0.5% |
-| default | on | 120 | 0 | 0.9% |
+| SMT off, nothing isolated | off | 120 | 0 | 0.5% |
+| SMT off, nothing isolated | on | 120 | 0 | 0.9% |
+| tuned: SMT off, isolated core, pinned | off | 120 | 0 | 0.9% |
+| tuned: SMT off, isolated core, pinned | on | 120 | 0 | 1.0% |
 
-| rig | tuning | median CV, noise off | p90 CV, noise off | median CV, noise on | p90 CV, noise on |
+| rig | class | median CV, noise off | p90 CV, noise off | median CV, noise on | p90 CV, noise on |
 | --- | --- | ---: | ---: | ---: | ---: |
-| benchgrid-rig-default-0 | default | 0.5% | 1.1% | 0.8% | 2.1% |
+| benchgrid-rig-default-0 | SMT off, nothing isolated | 0.5% | 1.1% | 0.8% | 2.1% |
 | benchgrid-rig-tuned-0 | tuned | 0.5% | 1.0% | 0.6% | 1.3% |
 | benchgrid-rig-tuned-1 | tuned | 0.8% | 2.0% | 0.7% | 1.3% |
 | benchgrid-rig-tuned-3 | tuned | 3.1% | 6.3% | 2.4% | 4.6% |
