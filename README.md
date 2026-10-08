@@ -308,6 +308,11 @@ make build
 could not find out, so a pipeline can tell a broken benchmark from a broken
 pipeline.
 
+A rig can also boot from the network with no disk at all: `deploy/pxe` boots
+a simulated diskless machine through PXE firmware, DHCP, TFTP and iPXE, its
+initramfs carrying nothing but the agent, and CI requires it to register and
+complete an experiment on every push.
+
 Reproduce the evidence with `make evidence`, which takes a while and needs a
 local Postgres and Docker. Check it with `make validate`, and render this
 README's numbers from it with `make readme`. Method and limits:

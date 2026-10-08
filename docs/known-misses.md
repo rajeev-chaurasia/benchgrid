@@ -103,6 +103,23 @@ the GPU node ran in us-central1 against the control plane in us-west1 over
 the VPC. That adds latency to the agent's control calls, not to anything it
 measures, and its run count is small.
 
+## PXE is proven on a simulated machine
+
+`deploy/pxe` boots a diskless rig over the network in CI: PXE firmware,
+DHCP, TFTP and HTTP boot through iPXE are all real, and the rig must register
+and complete an experiment for the job to pass. The machine is QEMU and the
+network is QEMU's user mode network, so nothing here has PXE booted physical
+hardware, and the GCP fleet itself is provisioned from images by a startup
+script, because GCE cannot network boot.
+
+## The sensor in the loop is simulated
+
+`avbench --loop` drives a fixed rate cycle from an absolute timer and replays
+a recording of frames made before the loop starts, which is the timing
+structure of a perception stage fed by a sensor. No real sensor, bus or
+interrupt is involved, so its jitter is the scheduler's and the timer's, not a
+device's.
+
 ## The noise run is about this machine
 
 The second claim is measured with a synthetic, seeded noise source on one
