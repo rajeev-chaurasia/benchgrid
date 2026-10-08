@@ -45,7 +45,8 @@ func main() {
 	}
 	// Results from the GCP fleet live in their own directory, named with a
 	// -gcp suffix, and add their own blocks when there are any.
-	if gdirs := allDirs("evidence/results", true); len(gdirs) > 0 {
+	gdirs := allDirs("evidence/results", true)
+	if len(gdirs) > 0 {
 		g, err := renderGCP(gdirs)
 		if err != nil {
 			die(err)
@@ -53,6 +54,9 @@ func main() {
 		for k, v := range g {
 			blocks[k] = v
 		}
+	}
+	if blocks["glance"], err = renderGlance(dir, gdirs); err != nil {
+		die(err)
 	}
 	old, err := os.ReadFile(*readme)
 	if err != nil {
