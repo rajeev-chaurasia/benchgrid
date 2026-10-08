@@ -182,7 +182,26 @@ def summarize_isolation(records: list[dict], store: Path, metric: str) -> dict:
                 "median_cv": float(np.median(list(medians.values()))) if medians else None,
                 "per_profile_median_cv": medians,
             }
-    return {"metric": metric, "cells": cells}
+    # Per rig as well as per class, because the class result is only
+    # meaningful if no single machine is driving it, and on cloud VMs the
+    # physical host a VM lands on can matter more than anything set inside it.
+    per_rig: dict[str, dict] = {}
+    for r in records:
+        if r["state"] != "SUCCEEDED" or not r.get("rig"):
+            continue
+        cv, _ = run_cv(store / "runs" / r["experiment"] / f"attempt-{r['attempt']}", metric)
+        if cv is None:
+            continue
+        cell = per_rig.setdefault(r["rig"], {"class": r["class"], "quiet": [], "noise": []})
+        cell[r["condition"]].append(cv)
+    rigs = {}
+    for rig, c in sorted(per_rig.items()):
+        rigs[rig] = {"class": c["class"]}
+        for cond in ("quiet", "noise"):
+            v = c[cond]
+            rigs[rig][cond] = {"runs": len(v), "median_cv": float(np.median(v)) if v else None,
+                               "p90_cv": float(np.percentile(v, 90)) if v else None}
+    return {"metric": metric, "cells": cells, "per_rig": rigs}
 
 
 # ---- scale ------------------------------------------------------------------------
