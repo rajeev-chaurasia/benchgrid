@@ -123,6 +123,44 @@ succeeded and that were declared invalid, and the median and maximum CV of
 iteration latency over the succeeded runs. An invalid run is the gate
 refusing to produce a number, and is counted, never averaged in.
 
+## GCP
+
+Everything under `evidence/results/<stamp>-gcp/` was measured on a fleet in
+GCP project infrastructure built by `deploy/gcp`: the control plane on a
+one-node GKE cluster, with Postgres in the cluster and the run store in a
+Cloud Storage bucket; bench nodes as `n2d-standard-4` VMs with one thread per
+core, so each has two physical cores; and one GPU node. Every binary was built
+from the published commit by Cloud Build. `env.json` records the fleet as it
+described itself. Each study writes every run it caused, sealed files and all,
+and `benchgrid-study validate` recomputes its summary from them in CI.
+
+**Tuned and default nodes.** A tuned node boots with its second core isolated
+from the scheduler (`isolcpus`, `nohz_full`, `rcu_nocbs`), interrupts steered
+off it, transparent huge pages off, and its clock synchronised to Google's
+metadata server; the agent pins each benchmark to that core, in a cgroup that
+owns it, and refuses to run if the clock's error bound exceeds 5 ms. A default
+node is the same machine type with none of that. A noise source on every
+node, switched by instance metadata, keeps core 0 busy in bursts.
+
+**gate.** The CI gate's evaluation: for each of the 30 avbench profiles, six
+null comparisons, where baseline and candidate are the same binary, and two
+with an injected slowdown of 3, 5, 8 or 12 percent, run on tuned nodes. A
+REGRESSION on a null comparison is a false alarm.
+
+**isolation.** For each profile, four runs on each class with the noise off
+and four with it on, the conditions alternating per profile. Published per
+class and condition, and per rig, because the per-rig numbers decide whether a
+class difference is the tuning or one machine.
+
+**gpu.** The perception workload in `workloads/gpubench` on the GPU node, at
+three batch sizes, gated on the GPU's own temperature and utilization; and the
+CI gate on the GPU, once with no change and once with a real one: a model with
+one more residual block per stage.
+
+**scale.** Short replayed jobs across every bench node, measuring how many
+ended well, how long they queued, and how many the fleet completed per minute,
+from the control plane's own timestamps.
+
 ## What none of this shows
 
 See `known-misses.md`. In short: no physical rig and no GPU took part, the

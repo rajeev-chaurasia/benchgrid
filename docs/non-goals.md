@@ -18,12 +18,12 @@ telemetry during a run, this should be revisited.
 
 ## Running rigs on Kubernetes
 
-`deploy/k8s` runs the control plane on Kubernetes, and CI checks those
-manifests decode strictly and match the binary's flags. It has never been
-applied to a cluster from this repository, and says so. Rig agents are
-deliberately not pods: a rig is scarce hardware owned by a host process, and
-scheduling it as capacity is the mistake this design avoids. `deploy/systemd`
-is how a rig runs its agent.
+The control plane runs on GKE (`deploy/gcp`), and `deploy/k8s` holds a
+generic manifest that CI checks decodes strictly and matches the binary's
+flags. Rig agents are deliberately not pods: a rig is scarce hardware owned by
+a host process, and scheduling it as capacity is the mistake this design
+avoids. `deploy/systemd` and `deploy/gcp/rig-startup.sh` are how a rig runs
+its agent.
 
 ## Real GPU telemetry
 
@@ -31,17 +31,19 @@ There is no GPU on the development machine. The probe parses `nvidia-smi`
 output for every device when present, and that parser is exercised by
 hand-written fixtures, not by hardware. `known-misses.md` says so.
 
-## BigQuery, and any analysis store
+## Analysis beyond loading
 
-benchgrid writes run artifacts and stops. Where they are loaded for analysis
-is the consumer's choice, and a warehouse client here would be a dependency
-with nothing in this repository to read from it.
+`benchgrid-bq` loads every sealed run into BigQuery, partitioned and
+clustered for the queries a performance dashboard makes. Dashboards
+themselves, and any analysis past a gate decision, belong to whatever reads
+those tables.
 
-## Deciding whether a change regressed
+## Choosing a baseline from history
 
-benchgrid publishes raw samples and descriptive statistics, never a verdict.
-Choosing a baseline, testing significance, and gating a merge on the result
-belong to whatever reads the run artifacts.
+`benchgrid-gate` decides between two builds it runs itself, in pairs. It does
+not choose a baseline from past runs, track trends, or compare across weeks:
+that needs a history and a policy for what counts as healthy, which belong to
+an analysis system reading the BigQuery tables.
 
 ## Fair share between teams
 

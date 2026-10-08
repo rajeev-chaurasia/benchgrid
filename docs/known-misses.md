@@ -70,6 +70,39 @@ The rig advertises its first device's model, the smallest memory of any
 device, and the count. A rig with two different GPUs can satisfy a spec that
 asks for the larger model only if the first device listed is that model.
 
+## Kernel isolation showed no benefit on these VMs
+
+The isolation study was meant to show tuned nodes measuring more steadily
+than default ones. On `n2d-standard-4` VMs it did not: with one thread per
+core, both classes were already well under one percent variation, and the
+largest effect in the data is one tuned VM several times noisier than its
+peers, which no setting inside a VM can fix. A bare-metal rig with frequency
+scaling, SMT and a busy system core is where isolation earns its keep, and
+nothing here measured one. The calibration canary exists because of this.
+
+## The canary was designed from one study, not evaluated by another
+
+The rig noise canary and the scheduler's `max_rig_noise_cv` were built after
+the isolation study exposed a noisy VM. The canaries are published for the
+fleet that ran, and tests show noisy and unmeasured rigs are kept away from a
+spec that asks, but no study has yet measured how much the gate's false alarm
+rate falls when noisy rigs are excluded.
+
+## Most gate pairs did not share a rig
+
+Paired runs share an affinity key and prefer the same rig, but with three
+nodes and several comparisons in flight the preferred rig was usually busy,
+and a pair split across two machines adds machine to machine variation to
+every difference the gate sees. Waiting for the preferred rig would trade
+throughput for that.
+
+## The GPU node is in another region
+
+GPUs were out of stock in every us-west1 zone when the evidence was taken, so
+the GPU node ran in us-central1 against the control plane in us-west1 over
+the VPC. That adds latency to the agent's control calls, not to anything it
+measures, and its run count is small.
+
 ## The noise run is about this machine
 
 The second claim is measured with a synthetic, seeded noise source on one
