@@ -1,0 +1,167 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a119d5a9e59691f64b1f6f0d119170",
+  "attempt": 1,
+  "fence": 62,
+  "status": "SUCCEEDED",
+  "status_reason": "",
+  "spec_sha256": "f013ef83b9ccaa4db473dfd18c3d4d812d74eb21a6fed84d1370c5bb2398c58a",
+  "spec": {
+    "benchmark": "avbench_loop_knn_kdtree_m",
+    "revision": "e8f6e3f4e4d9b5dfa6154635b4fb0a18d149347d",
+    "command": [
+      "{binary}",
+      "--profile",
+      "knn_kdtree_m",
+      "--loop",
+      "50",
+      "--cycles",
+      "500"
+    ],
+    "warmups": 0,
+    "repetitions": 3,
+    "timeout_seconds": 3600,
+    "requirements": {
+      "os": "linux",
+      "hardware_class": "n2d-isolated",
+      "allow_emulated": false
+    },
+    "environment": {
+      "require_isolation": true,
+      "max_clock_offset_ms": 5
+    },
+    "metrics": [
+      {
+        "name": "cycle_p50_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "cycle_p99_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "jitter_p99_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "jitter_max_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "deadline_misses",
+        "unit": "count",
+        "direction": "lower_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "bc3dcf298956ba7a3d3a6d0841cc12c29aa305b04c73b0484314c18fee901382"
+    }
+  },
+  "rig": {
+    "rig_id": "benchgrid-rig-tuned-us-central1-1",
+    "hardware_class": "n2d-isolated",
+    "arch": "x86_64",
+    "os": "linux",
+    "kernel": "6.1.0-53-cloud-amd64",
+    "cpu_model": "AMD EPYC 7B13",
+    "cpu_cores": 2,
+    "mem_bytes": 16780042240,
+    "gpu_vendor": "",
+    "gpu_model": "",
+    "gpu_memory_bytes": 0,
+    "driver_version": "",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "e8f6e3f4e4d9b5dfa6154635b4fb0a18d149347d",
+    "binary_sha256": "bc3dcf298956ba7a3d3a6d0841cc12c29aa305b04c73b0484314c18fee901382",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 0.38,
+      "cpu_util": 0.5,
+      "mem_free": 16360792064,
+      "gpu_util": null,
+      "temp_c": null
+    },
+    "preflight_after": {
+      "load1": 0.5,
+      "cpu_util": 0,
+      "mem_free": 16361799680,
+      "gpu_util": null,
+      "temp_c": null
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-08T04:46:35.633979000Z",
+    "started": "2026-10-08T04:46:35.666374676Z",
+    "finished": "2026-10-08T04:47:06.313740758Z"
+  },
+  "summary": {
+    "cycle_p50_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 5276555.666666667,
+      "median": 5275039,
+      "p90": 5285863,
+      "p95": 5287216,
+      "p99": 5288298.4,
+      "stddev": 11331.382675266657,
+      "mad": 8980,
+      "cv": 0.0021474960923562048
+    },
+    "cycle_p99_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 5947525.333333333,
+      "median": 5872238,
+      "p90": 6112502.8,
+      "p95": 6142535.9,
+      "p99": 6166562.38,
+      "stddev": 198418.48936108078,
+      "mad": 74469,
+      "cv": 0.03336152067298143
+    },
+    "deadline_misses": {
+      "unit": "count",
+      "n": 3,
+      "mean": 0,
+      "median": 0,
+      "p90": 0,
+      "p95": 0,
+      "p99": 0,
+      "stddev": 0,
+      "mad": 0,
+      "cv": null
+    },
+    "jitter_max_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 258711.66666666666,
+      "median": 267246,
+      "p90": 271120.4,
+      "p95": 271604.7,
+      "p99": 271992.14,
+      "stddev": 19129.937645829727,
+      "mad": 4843,
+      "cv": 0.07394308069793165
+    },
+    "jitter_p99_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 229681,
+      "median": 229717,
+      "p90": 239020.2,
+      "p95": 240183.1,
+      "p99": 241113.42,
+      "stddev": 11683.041598830332,
+      "mad": 11629,
+      "cv": 0.05086638249933748
+    }
+  }
+}

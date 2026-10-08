@@ -1,0 +1,28 @@
+{
+  "comparisons": 150,
+  "null_comparisons": 90,
+  "false_alarms": 0,
+  "injected_comparisons": 60,
+  "injected_caught": 60,
+  "by_size": {
+    "12%": {
+      "REGRESSION": 15
+    },
+    "3%": {
+      "REGRESSION": 15
+    },
+    "5%": {
+      "REGRESSION": 15
+    },
+    "8%": {
+      "REGRESSION": 15
+    },
+    "null": {
+      "PASS": 90
+    }
+  },
+  "runs": 908,
+  "reruns_for_noise": 1,
+  "pairs_on_one_rig": 454,
+  "pairs": 454
+}

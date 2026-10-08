@@ -70,31 +70,31 @@ The rig advertises its first device's model, the smallest memory of any
 device, and the count. A rig with two different GPUs can satisfy a spec that
 asks for the larger model only if the first device listed is that model.
 
-## Kernel isolation showed no benefit on these VMs
+## Isolation shows its benefit against a stock machine, not an SMT-off one
 
-The isolation study was meant to show tuned nodes measuring more steadily
-than default ones. On `n2d-standard-4` VMs it did not: with one thread per
-core, both classes were already well under one percent variation, and the
-largest effect in the data is one tuned VM several times noisier than its
-peers, which no setting inside a VM can fix. A bare-metal rig with frequency
-scaling, SMT and a busy system core is where isolation earns its keep, and
-nothing here measured one. The calibration canary exists because of this.
+The first isolation study compared tuned nodes with default nodes that
+already had SMT off, and found no difference. Against stock nodes, SMT on as
+GCE ships them, tuning held variation steady under noise where stock nodes
+did not. Both studies are published. Neither ran on bare metal with frequency
+scaling, where isolation should matter more, and in both one tuned VM was
+several times noisier than its peers.
 
-## The canary was designed from one study, not evaluated by another
+## The canary's limit was chosen by looking at canaries
 
-The rig noise canary and the scheduler's `max_rig_noise_cv` were built after
-the isolation study exposed a noisy VM. The canaries are published for the
-fleet that ran, and tests show noisy and unmeasured rigs are kept away from a
-spec that asks, but no study has yet measured how much the gate's false alarm
-rate falls when noisy rigs are excluded.
+The rig noise limit in the second gate evaluation, 1.2%, was set after
+reading the fleet's canaries so that it would exclude the one VM they kept
+flagging. That is how an operator would set it, but it means the evaluation
+shows the limit working for a value chosen on the same fleet, not for one
+chosen in advance.
 
-## Most gate pairs did not share a rig
+## The A/B did not isolate strict pairing
 
-Paired runs share an affinity key and prefer the same rig, but with three
-nodes and several comparisons in flight the preferred rig was usually busy,
-and a pair split across two machines adds machine to machine variation to
-every difference the gate sees. Waiting for the preferred rig would trade
-throughput for that.
+With four tuned nodes and two comparisons in flight per evaluation, soft
+affinity also put every pair on one rig, so strict pairing made no measured
+difference. What both evaluations had, and the first one lacked, is pairs on
+one machine, and their false alarms fell from eight to none; but they also
+ran on a larger, newer fleet, so that comparison is across fleets, not a
+controlled one.
 
 ## The GPU node is in another region
 

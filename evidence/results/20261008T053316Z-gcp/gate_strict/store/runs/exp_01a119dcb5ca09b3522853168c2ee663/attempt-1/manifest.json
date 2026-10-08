@@ -1,0 +1,20 @@
+{
+  "schema_version": "benchgrid.manifest/v1",
+  "files": [
+    {
+      "path": "host.json",
+      "sha256": "215b9c6537d7447e5be4aacd0abd4b1d8f51901bbe1587b10ece48106f2a03a8",
+      "size": 686
+    },
+    {
+      "path": "run.json",
+      "sha256": "bd292aa2829a2c83e05312b9f5c25ef3448caca0266dd82cb8b5b969a03a7775",
+      "size": 2479
+    },
+    {
+      "path": "samples.jsonl",
+      "sha256": "4e85e4b8ed33d145301d2329ea91a0e1409061be39c2e6dfff971ae253d0864d",
+      "size": 1227
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a119d870909c3b3f6def472b7bf600",
+  "attempt": 1,
+  "fence": 66,
+  "status": "SUCCEEDED",
+  "status_reason": "",
+  "spec_sha256": "1e67c2f8edd1318c421611986cd7eef1bec7851edba3fa957d3e4c7fb190b364",
+  "spec": {
+    "benchmark": "avbench_loop_voxel_downsample_l",
+    "revision": "e8f6e3f4e4d9b5dfa6154635b4fb0a18d149347d",
+    "command": [
+      "{binary}",
+      "--profile",
+      "voxel_downsample_l",
+      "--loop",
+      "50",
+      "--cycles",
+      "500"
+    ],
+    "warmups": 0,
+    "repetitions": 3,
+    "timeout_seconds": 3600,
+    "requirements": {
+      "os": "linux",
+      "hardware_class": "n2d-stock",
+      "allow_emulated": false
+    },
+    "environment": {
+      "max_clock_offset_ms": 5
+    },
+    "metrics": [
+      {
+        "name": "cycle_p50_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "cycle_p99_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "jitter_p99_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "jitter_max_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "deadline_misses",
+        "unit": "count",
+        "direction": "lower_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "bc3dcf298956ba7a3d3a6d0841cc12c29aa305b04c73b0484314c18fee901382"
+    }
+  },
+  "rig": {
+    "rig_id": "benchgrid-rig-stock-us-west1-1",
+    "hardware_class": "n2d-stock",
+    "arch": "x86_64",
+    "os": "linux",
+    "kernel": "6.1.0-53-cloud-amd64",
+    "cpu_model": "AMD EPYC 7B13",
+    "cpu_cores": 4,
+    "mem_bytes": 16779542528,
+    "gpu_vendor": "",
+    "gpu_model": "",
+    "gpu_memory_bytes": 0,
+    "driver_version": "",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "e8f6e3f4e4d9b5dfa6154635b4fb0a18d149347d",
+    "binary_sha256": "bc3dcf298956ba7a3d3a6d0841cc12c29aa305b04c73b0484314c18fee901382",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 0.26,
+      "cpu_util": 0,
+      "mem_free": 16222134272,
+      "gpu_util": null,
+      "temp_c": null
+    },
+    "preflight_after": {
+      "load1": 0.27,
+      "cpu_util": 0.24509803921625448,
+      "mem_free": 16218472448,
+      "gpu_util": null,
+      "temp_c": null
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-08T04:49:37.434249000Z",
+    "started": "2026-10-08T04:49:37.494686258Z",
+    "finished": "2026-10-08T04:50:08.059825775Z"
+  },
+  "summary": {
+    "cycle_p50_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 2552876.3333333335,
+      "median": 2539440,
+      "p90": 2591632,
+      "p95": 2598156,
+      "p99": 2603375.2,
+      "stddev": 46562.899397839625,
+      "mad": 24931,
+      "cv": 0.018239386996487084
+    },
+    "cycle_p99_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 3422606.3333333335,
+      "median": 3432280,
+      "p90": 3455735.2,
+      "p95": 3458667.1,
+      "p99": 3461012.62,
+      "stddev": 44622.975476018335,
+      "mad": 29319,
+      "cv": 0.013037717788758741
+    },
+    "deadline_misses": {
+      "unit": "count",
+      "n": 3,
+      "mean": 0,
+      "median": 0,
+      "p90": 0,
+      "p95": 0,
+      "p99": 0,
+      "stddev": 0,
+      "mad": 0,
+      "cv": null
+    },
+    "jitter_max_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 135573.66666666666,
+      "median": 134736,
+      "p90": 141220.8,
+      "p95": 142031.4,
+      "p99": 142679.88,
+      "stddev": 6887.8091098210125,
+      "mad": 5593,
+      "cv": 0.0508049186775776
+    },
+    "jitter_p99_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 115824,
+      "median": 113091,
+      "p90": 121535,
+      "p95": 122590.5,
+      "p99": 123434.9,
+      "stddev": 6875.714290166513,
+      "mad": 2356,
+      "cv": 0.05936346776286877
+    }
+  }
+}

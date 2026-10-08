@@ -127,6 +127,8 @@ numbers from them in CI.
 <!-- evidence:gcp_source -->
 - `evidence/results/20261008T020541Z-gcp/`, published at commit `a76802c`: 3 tuned and 1 default bench nodes (n2d-standard-4, one thread per core, AMD EPYC 7B13,
   kernel 6.1.0-53-cloud-amd64), control plane on GKE 1.35.8-gke.1225000, two replicas, Postgres 16 in cluster.
+- `evidence/results/20261008T053316Z-gcp/`, published at commit `c2abb86`: 4 tuned and 4 stock bench nodes (n2d-standard-4, AMD EPYC 7B13,
+  kernel 6.1.0-53-cloud-amd64), control plane on GKE 1.35.8-gke.1225000, two replicas, Postgres 16 in cluster.
 <!-- /evidence:gcp_source -->
 
 **The CI gate.** `benchgrid-gate` runs baseline and candidate in pairs,
@@ -151,6 +153,32 @@ one rig.
 On the null comparisons, 8 of 180 were called a regression: a false alarm rate
 of 4.4%. Of the injected ones, 55 of 60 were caught.
 <!-- /evidence:gcp_gate -->
+
+**Pairing on one rig, and leaving noisy rigs out.** The evaluation above had
+most of its pairs split across two machines. Two more evaluations ran at the
+same time on the same tuned nodes, one as before and one with pairs required
+to share a rig and rigs with a noisy canary excluded:
+
+<!-- evidence:gcp_gate_ab -->
+| | soft affinity, no noise limit | strict pairs, noisy rigs excluded |
+| --- | ---: | ---: |
+| comparisons | 150 | 150 |
+| pairs on one rig | 500 of 500 | 454 of 454 |
+| false alarms on null comparisons | 0 of 90 (0.0%) | 0 of 90 (0.0%) |
+| null comparisons inconclusive | 4 of 90 | 0 of 90 |
+| injected regressions caught | 60 of 60 | 60 of 60 |
+| caught at 3% | 15 of 15 | 15 of 15 |
+| caught at 5% | 15 of 15 | 15 of 15 |
+| caught at 8% | 15 of 15 | 15 of 15 |
+| caught at 12% | 15 of 15 | 15 of 15 |
+| runs, and reruns for noise | 1,000, 59 | 908, 1 |
+<!-- /evidence:gcp_gate_ab -->
+
+With more nodes and less contention, the soft pairs landed on one rig every
+time too, so this did not isolate strict pairing; both runs had what the
+first evaluation lacked, and neither raised a false alarm. What did differ is
+the noise limit: keeping noisy rigs out removed almost every rerun for noise
+and every inconclusive verdict.
 
 **The GPU.**
 
@@ -197,6 +225,36 @@ both classes were already well under one percent, and the rig by rig numbers
 show the largest effect is one VM several times noisier than identical peers,
 which nothing set inside a VM can fix. So benchgrid now measures it.
 
+**Against a stock machine.** That comparison was unfair to tuning: its
+default nodes already had SMT off, which is itself a tuning step. Run again
+against nodes as GCE ships them, SMT on and nothing isolated, two of each
+class in each of two regions so region cannot stand in for tuning, with the
+same noise source:
+
+<!-- evidence:gcp_tuning -->
+| nodes | noise on the system core | runs | not succeeded | median of per-profile median CV |
+| --- | --- | ---: | ---: | ---: |
+| tuned: SMT off, isolated core, pinned | off | 120 | 0 | 0.8% |
+| tuned: SMT off, isolated core, pinned | on | 120 | 0 | 0.9% |
+| stock: SMT on, nothing isolated | off | 120 | 0 | 1.1% |
+| stock: SMT on, nothing isolated | on | 120 | 0 | 1.6% |
+
+| rig | class | median CV, noise off | p90 CV, noise off | median CV, noise on | p90 CV, noise on |
+| --- | --- | ---: | ---: | ---: | ---: |
+| benchgrid-rig-stock-us-central1-0 | stock | 1.2% | 2.1% | 1.6% | 8.0% |
+| benchgrid-rig-stock-us-central1-1 | stock | 1.4% | 3.7% | 1.7% | 7.1% |
+| benchgrid-rig-stock-us-west1-0 | stock | 1.0% | 2.3% | 1.6% | 3.2% |
+| benchgrid-rig-stock-us-west1-1 | stock | 1.0% | 1.9% | 1.3% | 3.5% |
+| benchgrid-rig-tuned-us-central1-0 | tuned | 0.7% | 1.6% | 0.8% | 1.2% |
+| benchgrid-rig-tuned-us-central1-1 | tuned | 2.3% | 4.1% | 2.4% | 4.6% |
+| benchgrid-rig-tuned-us-west1-0 | tuned | 0.8% | 1.6% | 0.8% | 1.7% |
+| benchgrid-rig-tuned-us-west1-1 | tuned | 0.7% | 1.6% | 0.7% | 1.2% |
+<!-- /evidence:gcp_tuning -->
+
+Against a stock machine the effect is there: stock nodes vary more when the
+noise is on, and tuned nodes barely move. One tuned VM was again noisier than
+its peers, the case the canary below exists for.
+
 **Noisy rigs, benched.** Every idle agent runs a fixed calibration canary on
 its bench core and reports the spread; a spec that sets `max_rig_noise_cv` is
 never placed on a rig noisier than that, or on one not yet measured. Jobs with
@@ -212,6 +270,28 @@ and without that limit, interleaved on the same fleet:
 
 40 of 40 limited jobs and 40 of 40 unlimited ones succeeded.
 <!-- /evidence:gcp_canary -->
+
+**A sensor in the loop, simulated.** A perception stage on a real rig is
+fed by a sensor at a fixed rate and is judged on how late it wakes, how long
+each cycle takes, and how many cycles miss their deadline, not on its mean.
+`avbench --loop` drives that structure from an absolute timer, replaying a
+recording of frames made before the loop starts, on tuned and stock nodes
+with the noise off and on:
+
+<!-- evidence:gcp_hil -->
+A simulated sensor at 50 Hz (a 20 ms budget per cycle), 500 cycles per session.
+
+| nodes | noise | cycles | deadline misses | cycle p50 | cycle p99 | wake-up jitter p99 | worst wake-up jitter |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| tuned | off | 18,000 | 0 | 4.49 ms | 5.24 ms | 0.17 ms | 0.39 ms |
+| tuned | on | 18,000 | 0 | 4.46 ms | 5.47 ms | 0.17 ms | 2.30 ms |
+| stock | off | 18,000 | 3 | 4.52 ms | 5.53 ms | 0.14 ms | 0.39 ms |
+| stock | on | 18,000 | 2 | 4.41 ms | 5.53 ms | 0.14 ms | 0.45 ms |
+<!-- /evidence:gcp_hil -->
+
+The kernels used a small part of their budget, so this is a mild test: it
+shows the loop and its measurements on real VMs more than it stresses either
+class.
 
 **Scale.**
 

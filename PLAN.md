@@ -64,6 +64,11 @@ than left as first written. The substantive changes:
   several times noisier than its identical peers. That finding produced the
   calibration canary and the scheduler's rig noise limit, which kept every
   limited job off that VM in the canary study.
+- **The first isolation study was unfair to tuning.** Its default nodes had
+  SMT off, itself a tuning step. Rerun against stock GCE nodes, tuning showed
+  the effect it was built for. A simulated sensor loop, an A/B of strict
+  pairing and the noise limit, and a PXE boot of a simulated diskless rig in
+  CI were added in the same pass.
 - **Several known misses were closed rather than listed:** an orphaned
   benchmark's lifetime is recorded, reused process group ids are detected, an
   unrecorded launch quarantines the rig, every GPU is read, and the fence

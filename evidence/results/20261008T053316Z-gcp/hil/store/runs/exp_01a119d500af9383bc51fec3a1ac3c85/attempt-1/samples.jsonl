@@ -1,0 +1,15 @@
+{"metric":"cycle_p50_ns","iteration":0,"warmup":false,"value":5500039,"unit":"ns","t_offset_ns":0}
+{"metric":"cycle_p99_ns","iteration":0,"warmup":false,"value":6184729,"unit":"ns","t_offset_ns":0}
+{"metric":"jitter_p99_ns","iteration":0,"warmup":false,"value":212838,"unit":"ns","t_offset_ns":0}
+{"metric":"jitter_max_ns","iteration":0,"warmup":false,"value":240646,"unit":"ns","t_offset_ns":0}
+{"metric":"deadline_misses","iteration":0,"warmup":false,"value":0,"unit":"count","t_offset_ns":0}
+{"metric":"cycle_p50_ns","iteration":1,"warmup":false,"value":5557719,"unit":"ns","t_offset_ns":10057638280}
+{"metric":"cycle_p99_ns","iteration":1,"warmup":false,"value":6465239,"unit":"ns","t_offset_ns":10057638280}
+{"metric":"jitter_p99_ns","iteration":1,"warmup":false,"value":356545,"unit":"ns","t_offset_ns":10057638280}
+{"metric":"jitter_max_ns","iteration":1,"warmup":false,"value":2299561,"unit":"ns","t_offset_ns":10057638280}
+{"metric":"deadline_misses","iteration":1,"warmup":false,"value":0,"unit":"count","t_offset_ns":10057638280}
+{"metric":"cycle_p50_ns","iteration":2,"warmup":false,"value":5455509,"unit":"ns","t_offset_ns":20097379816}
+{"metric":"cycle_p99_ns","iteration":2,"warmup":false,"value":6072469,"unit":"ns","t_offset_ns":20097379816}
+{"metric":"jitter_p99_ns","iteration":2,"warmup":false,"value":228080,"unit":"ns","t_offset_ns":20097379816}
+{"metric":"jitter_max_ns","iteration":2,"warmup":false,"value":283543,"unit":"ns","t_offset_ns":20097379816}
+{"metric":"deadline_misses","iteration":2,"warmup":false,"value":0,"unit":"count","t_offset_ns":20097379816}

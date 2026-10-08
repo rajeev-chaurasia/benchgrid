@@ -1,0 +1,166 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a119d5013b2d0c4d2c76a763dbc161",
+  "attempt": 1,
+  "fence": 61,
+  "status": "SUCCEEDED",
+  "status_reason": "",
+  "spec_sha256": "b23a15c117a50abedf1cedbb13a22d38dd5cdc5f16ca7e8c692e6b03215685d8",
+  "spec": {
+    "benchmark": "avbench_loop_icp_step_m",
+    "revision": "e8f6e3f4e4d9b5dfa6154635b4fb0a18d149347d",
+    "command": [
+      "{binary}",
+      "--profile",
+      "icp_step_m",
+      "--loop",
+      "50",
+      "--cycles",
+      "500"
+    ],
+    "warmups": 0,
+    "repetitions": 3,
+    "timeout_seconds": 3600,
+    "requirements": {
+      "os": "linux",
+      "hardware_class": "n2d-stock",
+      "allow_emulated": false
+    },
+    "environment": {
+      "max_clock_offset_ms": 5
+    },
+    "metrics": [
+      {
+        "name": "cycle_p50_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "cycle_p99_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "jitter_p99_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "jitter_max_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "deadline_misses",
+        "unit": "count",
+        "direction": "lower_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "bc3dcf298956ba7a3d3a6d0841cc12c29aa305b04c73b0484314c18fee901382"
+    }
+  },
+  "rig": {
+    "rig_id": "benchgrid-rig-stock-us-central1-0",
+    "hardware_class": "n2d-stock",
+    "arch": "x86_64",
+    "os": "linux",
+    "kernel": "6.1.0-53-cloud-amd64",
+    "cpu_model": "AMD EPYC 7B13",
+    "cpu_cores": 4,
+    "mem_bytes": 16779542528,
+    "gpu_vendor": "",
+    "gpu_model": "",
+    "gpu_memory_bytes": 0,
+    "driver_version": "",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "e8f6e3f4e4d9b5dfa6154635b4fb0a18d149347d",
+    "binary_sha256": "bc3dcf298956ba7a3d3a6d0841cc12c29aa305b04c73b0484314c18fee901382",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 0.11,
+      "cpu_util": 0.26470588235260023,
+      "mem_free": 16211009536,
+      "gpu_util": null,
+      "temp_c": null
+    },
+    "preflight_after": {
+      "load1": 0.46,
+      "cpu_util": 0,
+      "mem_free": 16201547776,
+      "gpu_util": null,
+      "temp_c": null
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-08T04:45:52.433642000Z",
+    "started": "2026-10-08T04:45:52.504915558Z",
+    "finished": "2026-10-08T04:46:23.052050970Z"
+  },
+  "summary": {
+    "cycle_p50_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 5413042.666666667,
+      "median": 5411299,
+      "p90": 5419803.8,
+      "p95": 5420866.9,
+      "p99": 5421717.38,
+      "stddev": 8156.501721530703,
+      "mad": 5400,
+      "cv": 0.0015068238371291924
+    },
+    "cycle_p99_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 5845389.333333333,
+      "median": 5848789,
+      "p90": 5885461,
+      "p95": 5890045,
+      "p99": 5893712.2,
+      "stddev": 51024.51332774604,
+      "mad": 45840,
+      "cv": 0.008729018790378726
+    },
+    "deadline_misses": {
+      "unit": "count",
+      "n": 3,
+      "mean": 0,
+      "median": 0,
+      "p90": 0,
+      "p95": 0,
+      "p99": 0,
+      "stddev": 0,
+      "mad": 0,
+      "cv": null
+    },
+    "jitter_max_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 185583,
+      "median": 187752,
+      "p90": 200763.2,
+      "p95": 202389.6,
+      "p99": 203690.72,
+      "stddev": 19607.68285647236,
+      "mad": 16264,
+      "cv": 0.10565452038426126
+    },
+    "jitter_p99_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 159766.33333333334,
+      "median": 164632,
+      "p90": 169168,
+      "p95": 169735,
+      "p99": 170188.6,
+      "stddev": 13635.90944284001,
+      "mad": 5670,
+      "cv": 0.08534907923555031
+    }
+  }
+}

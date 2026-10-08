@@ -1,0 +1,167 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a119d870038e0bfd155e838216e34c",
+  "attempt": 1,
+  "fence": 65,
+  "status": "SUCCEEDED",
+  "status_reason": "",
+  "spec_sha256": "a8b02b7479ad0a95580e1971fd46ac009db05c2c5c366990ff742e9561f056ff",
+  "spec": {
+    "benchmark": "avbench_loop_voxel_downsample_l",
+    "revision": "e8f6e3f4e4d9b5dfa6154635b4fb0a18d149347d",
+    "command": [
+      "{binary}",
+      "--profile",
+      "voxel_downsample_l",
+      "--loop",
+      "50",
+      "--cycles",
+      "500"
+    ],
+    "warmups": 0,
+    "repetitions": 3,
+    "timeout_seconds": 3600,
+    "requirements": {
+      "os": "linux",
+      "hardware_class": "n2d-isolated",
+      "allow_emulated": false
+    },
+    "environment": {
+      "require_isolation": true,
+      "max_clock_offset_ms": 5
+    },
+    "metrics": [
+      {
+        "name": "cycle_p50_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "cycle_p99_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "jitter_p99_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "jitter_max_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "deadline_misses",
+        "unit": "count",
+        "direction": "lower_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "bc3dcf298956ba7a3d3a6d0841cc12c29aa305b04c73b0484314c18fee901382"
+    }
+  },
+  "rig": {
+    "rig_id": "benchgrid-rig-tuned-us-central1-1",
+    "hardware_class": "n2d-isolated",
+    "arch": "x86_64",
+    "os": "linux",
+    "kernel": "6.1.0-53-cloud-amd64",
+    "cpu_model": "AMD EPYC 7B13",
+    "cpu_cores": 2,
+    "mem_bytes": 16780042240,
+    "gpu_vendor": "",
+    "gpu_model": "",
+    "gpu_memory_bytes": 0,
+    "driver_version": "",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "e8f6e3f4e4d9b5dfa6154635b4fb0a18d149347d",
+    "binary_sha256": "bc3dcf298956ba7a3d3a6d0841cc12c29aa305b04c73b0484314c18fee901382",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 0.65,
+      "cpu_util": 0.22000000000025466,
+      "mem_free": 16367591424,
+      "gpu_util": null,
+      "temp_c": null
+    },
+    "preflight_after": {
+      "load1": 0.66,
+      "cpu_util": 0.0408163265305933,
+      "mem_free": 16359788544,
+      "gpu_util": null,
+      "temp_c": null
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-08T04:49:37.433410000Z",
+    "started": "2026-10-08T04:49:37.466145596Z",
+    "finished": "2026-10-08T04:50:08.145273373Z"
+  },
+  "summary": {
+    "cycle_p50_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 3532350,
+      "median": 3565790,
+      "p90": 3601806,
+      "p95": 3606308,
+      "p99": 3609909.6,
+      "stddev": 99488.22844939998,
+      "mad": 45020,
+      "cv": 0.028164884127960133
+    },
+    "cycle_p99_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 6773306,
+      "median": 7349579,
+      "p90": 7431651,
+      "p95": 7441910,
+      "p99": 7450117.2,
+      "stddev": 1088189.3037964487,
+      "mad": 102590,
+      "cv": 0.1606585179816841
+    },
+    "deadline_misses": {
+      "unit": "count",
+      "n": 3,
+      "mean": 0,
+      "median": 0,
+      "p90": 0,
+      "p95": 0,
+      "p99": 0,
+      "stddev": 0,
+      "mad": 0,
+      "cv": null
+    },
+    "jitter_max_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 457192,
+      "median": 359793,
+      "p90": 646234.6000000001,
+      "p95": 682039.8,
+      "p99": 710683.96,
+      "stddev": 228121.04256950956,
+      "mad": 65855,
+      "cv": 0.49896114229800514
+    },
+    "jitter_p99_ns": {
+      "unit": "ns",
+      "n": 3,
+      "mean": 310398.3333333333,
+      "median": 259505,
+      "p90": 391735.4,
+      "p95": 408264.19999999995,
+      "p99": 421487.24,
+      "stddev": 99269.05478210888,
+      "mad": 12608,
+      "cv": 0.3198118163717875
+    }
+  }
+}

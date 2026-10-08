@@ -152,6 +152,21 @@ and four with it on, the conditions alternating per profile. Published per
 class and condition, and per rig, because the per-rig numbers decide whether a
 class difference is the tuning or one machine.
 
+**tuning.** The isolation study again, against stock nodes: the same machine
+type as GCE ships it, SMT on and nothing isolated. Two tuned and two stock
+nodes in us-west1-b and the same in us-central1-a.
+
+**hil.** `avbench --loop` at 50 Hz, 500 cycles a session, on four perception
+kernels, on tuned and stock nodes with the noise off and on. Each cycle wakes
+on an absolute schedule and processes the next frame of a recording made
+before the loop starts; deadline misses, cycle times and wake-up lateness are
+published per session.
+
+**gate_soft and gate_strict.** Two gate evaluations at the same time on the
+same tuned nodes, 150 comparisons each: one with soft affinity and no noise
+limit, one with pairs required to share a rig and rigs with a canary CV above
+1.2% excluded.
+
 **gpu.** The perception workload in `workloads/gpubench` on the GPU node, at
 three batch sizes, gated on the GPU's own temperature and utilization; and the
 CI gate on the GPU, once with no change and once with a real one: a model with

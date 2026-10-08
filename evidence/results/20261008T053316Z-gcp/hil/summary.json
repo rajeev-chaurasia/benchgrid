@@ -1,0 +1,55 @@
+{
+  "hz": 50.0,
+  "cycles_per_session": 500,
+  "period_ms": 20.0,
+  "cells": {
+    "n2d-isolated/quiet": {
+      "runs": 12,
+      "not_succeeded": 0,
+      "loop_sessions": 36,
+      "cycles": 18000,
+      "deadline_misses": 0,
+      "miss_rate": 0.0,
+      "median_cycle_p50_ms": 4.4913795,
+      "median_cycle_p99_ms": 5.237005,
+      "median_jitter_p99_ms": 0.1661105,
+      "worst_jitter_ms": 0.392559
+    },
+    "n2d-isolated/noise": {
+      "runs": 12,
+      "not_succeeded": 0,
+      "loop_sessions": 36,
+      "cycles": 18000,
+      "deadline_misses": 0,
+      "miss_rate": 0.0,
+      "median_cycle_p50_ms": 4.457615,
+      "median_cycle_p99_ms": 5.465965,
+      "median_jitter_p99_ms": 0.1706775,
+      "worst_jitter_ms": 2.299561
+    },
+    "n2d-stock/quiet": {
+      "runs": 12,
+      "not_succeeded": 0,
+      "loop_sessions": 36,
+      "cycles": 18000,
+      "deadline_misses": 3,
+      "miss_rate": 0.00016666666666666666,
+      "median_cycle_p50_ms": 4.521855,
+      "median_cycle_p99_ms": 5.526931,
+      "median_jitter_p99_ms": 0.1442735,
+      "worst_jitter_ms": 0.387474
+    },
+    "n2d-stock/noise": {
+      "runs": 12,
+      "not_succeeded": 0,
+      "loop_sessions": 36,
+      "cycles": 18000,
+      "deadline_misses": 2,
+      "miss_rate": 0.00011111111111111112,
+      "median_cycle_p50_ms": 4.4062895,
+      "median_cycle_p99_ms": 5.533515,
+      "median_jitter_p99_ms": 0.1356205,
+      "worst_jitter_ms": 0.450306
+    }
+  }
+}
