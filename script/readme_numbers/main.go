@@ -381,6 +381,19 @@ type isoCell struct {
 type isoSummary struct {
 	Metric string             `json:"metric"`
 	Cells  map[string]isoCell `json:"cells"`
+	PerRig map[string]struct {
+		Class string `json:"class"`
+		Quiet struct {
+			Runs     int      `json:"runs"`
+			MedianCV *float64 `json:"median_cv"`
+			P90CV    *float64 `json:"p90_cv"`
+		} `json:"quiet"`
+		Noise struct {
+			Runs     int      `json:"runs"`
+			MedianCV *float64 `json:"median_cv"`
+			P90CV    *float64 `json:"p90_cv"`
+		} `json:"noise"`
+	} `json:"per_rig"`
 }
 
 type scaleSummary struct {
@@ -478,6 +491,17 @@ func renderGCP(dir string) (map[string]string, error) {
 				label := map[string]string{"n2d-isolated": "tuned", "n2d-default": "default"}[cls]
 				fmt.Fprintf(&t, "| %s | %s | %d | %d | %s |\n", label, map[string]string{"quiet": "off", "noise": "on"}[cond], c.Runs, c.NotSucceeded, pct(c.MedianCV))
 			}
+		}
+		t.WriteString("\n| rig | tuning | median CV, noise off | p90 CV, noise off | median CV, noise on | p90 CV, noise on |\n| --- | --- | ---: | ---: | ---: | ---: |\n")
+		names := make([]string, 0, len(iso.PerRig))
+		for n := range iso.PerRig {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			r := iso.PerRig[n]
+			label := map[string]string{"n2d-isolated": "tuned", "n2d-default": "default"}[r.Class]
+			fmt.Fprintf(&t, "| %s | %s | %s | %s | %s | %s |\n", n, label, pct(r.Quiet.MedianCV), pct(r.Quiet.P90CV), pct(r.Noise.MedianCV), pct(r.Noise.P90CV))
 		}
 		b["gcp_isolation"] = t.String()
 	}
