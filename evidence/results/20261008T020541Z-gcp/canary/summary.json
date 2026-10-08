@@ -1,0 +1,50 @@
+{
+  "limit": 0.01,
+  "placements": {
+    "limited": {
+      "benchgrid-rig-default-0": 15,
+      "benchgrid-rig-tuned-0": 12,
+      "benchgrid-rig-tuned-1": 13
+    },
+    "unlimited": {
+      "benchgrid-rig-default-0": 6,
+      "benchgrid-rig-tuned-0": 8,
+      "benchgrid-rig-tuned-1": 7,
+      "benchgrid-rig-tuned-3": 19
+    }
+  },
+  "states": {
+    "limited": {
+      "SUCCEEDED": 40
+    },
+    "unlimited": {
+      "SUCCEEDED": 40
+    }
+  },
+  "canary": {
+    "benchgrid-rig-default-0": {
+      "observations": 4,
+      "min": 0.0030739309826396653,
+      "median": 0.0064620415834399855,
+      "max": 0.015374558033975283
+    },
+    "benchgrid-rig-tuned-0": {
+      "observations": 4,
+      "min": 0.0030506750335908598,
+      "median": 0.003319136543426162,
+      "max": 0.0036377381518544697
+    },
+    "benchgrid-rig-tuned-1": {
+      "observations": 4,
+      "min": 0.004396345626858695,
+      "median": 0.004731474523197302,
+      "max": 0.006594381900517852
+    },
+    "benchgrid-rig-tuned-3": {
+      "observations": 4,
+      "min": 0.0043188324774728025,
+      "median": 0.01964390485306747,
+      "max": 0.020468230786387195
+    }
+  }
+}

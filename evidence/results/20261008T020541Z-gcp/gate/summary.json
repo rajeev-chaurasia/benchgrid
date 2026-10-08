@@ -1,0 +1,35 @@
+{
+  "comparisons": 240,
+  "null_comparisons": 180,
+  "false_alarms": 8,
+  "injected_comparisons": 60,
+  "injected_caught": 55,
+  "by_size": {
+    "12%": {
+      "REGRESSION": 15
+    },
+    "3%": {
+      "REGRESSION": 12,
+      "INCONCLUSIVE": 2,
+      "PASS": 1
+    },
+    "5%": {
+      "REGRESSION": 13,
+      "IMPROVEMENT": 1,
+      "INCONCLUSIVE": 1
+    },
+    "8%": {
+      "REGRESSION": 15
+    },
+    "null": {
+      "INCONCLUSIVE": 26,
+      "PASS": 145,
+      "REGRESSION": 8,
+      "IMPROVEMENT": 1
+    }
+  },
+  "runs": 1986,
+  "reruns_for_noise": 80,
+  "pairs_on_one_rig": 396,
+  "pairs": 993
+}

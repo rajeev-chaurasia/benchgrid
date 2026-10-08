@@ -1,0 +1,121 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a118bba6225f72ee6699dc9a55cf16",
+  "attempt": 1,
+  "fence": 10,
+  "status": "SUCCEEDED",
+  "status_reason": "",
+  "spec_sha256": "ddeaa761349cbb35387f4c569920a3e030241b69c09ea3f272d4994de25de3de",
+  "spec": {
+    "benchmark": "gpubench_perception",
+    "revision": "da17b3e93fa454e6d886823342840aafc3525172",
+    "command": [
+      "/usr/bin/python3",
+      "{binary}",
+      "--iters",
+      "20",
+      "--batch",
+      "16",
+      "--size",
+      "320"
+    ],
+    "warmups": 1,
+    "repetitions": 10,
+    "timeout_seconds": 1800,
+    "requirements": {
+      "os": "linux",
+      "gpu_vendor": "nvidia",
+      "min_gpu_memory_bytes": 17179869184,
+      "driver": "\u003e=550",
+      "allow_emulated": false
+    },
+    "environment": {
+      "max_gpu_util": 0.1,
+      "max_temp_c": 85,
+      "preflight_timeout_seconds": 120,
+      "max_clock_offset_ms": 5
+    },
+    "metrics": [
+      {
+        "name": "gpu_time_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      },
+      {
+        "name": "frames_per_s",
+        "unit": "ops_per_s",
+        "direction": "higher_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "f469331aa461c482f2d52c6f9d43ede4ef4a77bfbaa697411a57aaf7aee81410"
+    }
+  },
+  "rig": {
+    "rig_id": "benchgrid-rig-gpu-0",
+    "hardware_class": "gcp-l4",
+    "arch": "x86_64",
+    "os": "linux",
+    "kernel": "6.8.0-1069-gcp",
+    "cpu_model": "Intel(R) Xeon(R) CPU @ 2.20GHz",
+    "cpu_cores": 4,
+    "mem_bytes": 16767148032,
+    "gpu_vendor": "nvidia",
+    "gpu_model": "NVIDIA L4",
+    "gpu_memory_bytes": 24152899584,
+    "driver_version": "580.178.04",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "da17b3e93fa454e6d886823342840aafc3525172",
+    "binary_sha256": "f469331aa461c482f2d52c6f9d43ede4ef4a77bfbaa697411a57aaf7aee81410",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 1.2,
+      "cpu_util": 0.2399999999998363,
+      "mem_free": 15654379520,
+      "gpu_util": 0,
+      "temp_c": 47
+    },
+    "preflight_after": {
+      "load1": 1.27,
+      "cpu_util": 0,
+      "mem_free": 15637712896,
+      "gpu_util": 0,
+      "temp_c": 48
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-07T23:38:33.383268000Z",
+    "started": "2026-10-07T23:38:33.437455564Z",
+    "finished": "2026-10-07T23:39:12.880061725Z"
+  },
+  "summary": {
+    "frames_per_s": {
+      "unit": "ops_per_s",
+      "n": 10,
+      "mean": 2188.8754999999996,
+      "median": 2188.6175,
+      "p90": 2200.9651000000003,
+      "p95": 2201.92855,
+      "p99": 2202.69931,
+      "stddev": 9.327504385180184,
+      "mad": 6.699999999999818,
+      "cv": 0.004261322485075184
+    },
+    "gpu_time_ns": {
+      "unit": "ns",
+      "n": 10,
+      "mean": 146196169.5,
+      "median": 146211326,
+      "p90": 146932216.8,
+      "p95": 146985212.4,
+      "p99": 147027608.88,
+      "stddev": 622639.5644093244,
+      "mad": 447486.5,
+      "cv": 0.004258932135765188
+    }
+  }
+}

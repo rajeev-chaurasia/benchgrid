@@ -1,0 +1,96 @@
+{
+  "schema_version": "benchgrid.run/v1",
+  "run_id": "exp_01a118b589cd0193830e4c2d2b98f264",
+  "attempt": 1,
+  "fence": 621,
+  "status": "SUCCEEDED",
+  "status_reason": "",
+  "spec_sha256": "aaa2b083e8e3fd034b96f7734a10bfeda4e8107e8c49155edbd6b39f3bb5ac09",
+  "spec": {
+    "benchmark": "avbench_voxel_downsample_l",
+    "revision": "168a4eea1686e8c4f87baee375dc86997f752c0e",
+    "command": [
+      "{binary}",
+      "--profile",
+      "voxel_downsample_l"
+    ],
+    "warmups": 2,
+    "repetitions": 10,
+    "timeout_seconds": 600,
+    "requirements": {
+      "os": "linux",
+      "hardware_class": "n2d-isolated",
+      "allow_emulated": false
+    },
+    "environment": {
+      "require_isolation": true,
+      "max_clock_offset_ms": 5
+    },
+    "metrics": [
+      {
+        "name": "work_ns",
+        "unit": "ns",
+        "direction": "lower_is_better"
+      }
+    ],
+    "artifacts": {
+      "binary_sha256": "4c23635dc40906cad3eee5ff9c02f9c335421090c056eee1e1f79a7302c05440"
+    },
+    "affinity": "cmp-05be44ec46a1"
+  },
+  "rig": {
+    "rig_id": "benchgrid-rig-tuned-1",
+    "hardware_class": "n2d-isolated",
+    "arch": "x86_64",
+    "os": "linux",
+    "kernel": "6.1.0-53-cloud-amd64",
+    "cpu_model": "AMD EPYC 7B13",
+    "cpu_cores": 2,
+    "mem_bytes": 16780042240,
+    "gpu_vendor": "",
+    "gpu_model": "",
+    "gpu_memory_bytes": 0,
+    "driver_version": "",
+    "firmware": "",
+    "emulated": false
+  },
+  "environment": {
+    "git_revision": "168a4eea1686e8c4f87baee375dc86997f752c0e",
+    "binary_sha256": "4c23635dc40906cad3eee5ff9c02f9c335421090c056eee1e1f79a7302c05440",
+    "config_sha256": null,
+    "governor": "",
+    "preflight_before": {
+      "load1": 0.69,
+      "cpu_util": 0,
+      "mem_free": 16353153024,
+      "gpu_util": null,
+      "temp_c": null
+    },
+    "preflight_after": {
+      "load1": 0.69,
+      "cpu_util": 0,
+      "mem_free": 16353439744,
+      "gpu_util": null,
+      "temp_c": null
+    }
+  },
+  "timing": {
+    "lease_acquired": "2026-10-07T23:31:53.717834000Z",
+    "started": "2026-10-07T23:31:53.728098655Z",
+    "finished": "2026-10-07T23:31:55.162884824Z"
+  },
+  "summary": {
+    "work_ns": {
+      "unit": "ns",
+      "n": 10,
+      "mean": 45780685.1,
+      "median": 45629466,
+      "p90": 46516279,
+      "p95": 47603222.5,
+      "p99": 48472777.3,
+      "stddev": 1145162.0660302918,
+      "mad": 517479.5,
+      "cv": 0.025014087568346412
+    }
+  }
+}

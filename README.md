@@ -13,10 +13,12 @@ It is built so its central claim can be checked rather than taken on trust:
 > executes work for two lease holders at overlapping times, and the same
 > harness produces overlapping execution when the fencing check is removed.
 
-Every rig here is a process, or a Linux container, on one Apple M4 laptop. No
-physical rig and no GPU took part in anything below. Rigs that advertise hardware they do not have are
-marked `emulated` in every result they produce, and a spec must opt in before
-it can be placed on one.
+The first results below come from one Apple M4 laptop, where every rig is a
+process or a Linux container; rigs that advertise hardware they do not have
+are marked `emulated` in every result they produce, and a spec must opt in
+before it can be placed on one. The section after them comes from a fleet of
+cloud VMs in GCP and a real NVIDIA L4, none of them emulated. No physical
+bench rig took part in either.
 
 ## The measured result
 
@@ -111,6 +113,134 @@ leave switched on here.
 On this machine the gate is coarse and conservative, and its numbers are
 about this machine. The first two designs of the gate failed outright, one by
 making the noise worse, and [PLAN.md](PLAN.md) records both.
+
+## On real machines: a GCP fleet
+
+Everything above runs on one laptop. This section is a fleet in GCP built by
+`deploy/gcp`: the control plane on GKE with its run store in Cloud Storage,
+bench nodes provisioned by a startup script with kernel isolation, a GCE
+synchronised clock and the agent under systemd, a real NVIDIA GPU node, and
+every binary built from the published commit by Cloud Build. Each study
+publishes every run it caused, and `benchgrid-study validate` recomputes its
+numbers from them in CI.
+
+<!-- evidence:gcp_source -->
+From `evidence/results/20261008T020541Z-gcp/`, at commit `a76802c`: 3 tuned and 1 default `n2d-standard-4, one thread per core` bench nodes
+(AMD EPYC 7B13, kernel 6.1.0-53-cloud-amd64) in us-west1-b, with the control plane on GKE 1.35.8-gke.1225000, two replicas, Postgres 16 in cluster.
+<!-- /evidence:gcp_source -->
+
+**The CI gate.** `benchgrid-gate` runs baseline and candidate in pairs,
+alternating which goes first, reruns any run noisier than 5%, and calls a
+regression only when the whole 95% bootstrap interval is above no change and
+the estimate is at least 2% slower. Evaluated on every avbench profile:
+
+<!-- evidence:gcp_gate -->
+240 comparisons over the 30 avbench profiles on tuned nodes: 180 null, where
+baseline and candidate are the same binary, and 60 with an injected slowdown.
+1,986 runs, 80 of them reruns of a run noisier than 5%; 396 of 993 pairs ran on
+one rig.
+
+| comparison | comparisons | REGRESSION | PASS | INCONCLUSIVE | other |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| null (no change) | 180 | 8 | 145 | 26 | 1 |
+| injected 3% | 15 | 12 | 1 | 2 | 0 |
+| injected 5% | 15 | 13 | 0 | 1 | 1 |
+| injected 8% | 15 | 15 | 0 | 0 | 0 |
+| injected 12% | 15 | 15 | 0 | 0 | 0 |
+
+On the null comparisons, 8 of 180 were called a regression: a false alarm rate
+of 4.4%. Of the injected ones, 55 of 60 were caught.
+<!-- /evidence:gcp_gate -->
+
+**The GPU.**
+
+<!-- evidence:gcp_gpu -->
+On a real NVIDIA L4, 23034 MiB, driver 580.178.04, not emulated. Before each run the agent read the GPU's
+temperature at 47 C to 52 C and its utilization at 0% through nvidia-smi, and would
+have waited or refused above 85 C or 10%.
+
+| batch of frames | runs | not succeeded | GPU time per forward pass | frames per second | median CV |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 4 at 192x192 | 3 | 0 | 2.77 ms | 1446 | 1.8% |
+| 8 at 256x256 | 3 | 0 | 2.73 ms | 2927 | 2.5% |
+| 16 at 320x320 | 3 | 0 | 7.32 ms | 2186 | 0.4% |
+
+| gate comparison on the GPU | verdict | change | 95% interval | pairs |
+| --- | --- | ---: | --- | ---: |
+| null | PASS | +0.1% | -5.8% to +1.6% | 3 |
+| depth 2 to 3 | REGRESSION | +34.8% | +33.5% to +36.5% | 3 |
+<!-- /evidence:gcp_gpu -->
+
+**Kernel isolation, and the result that went against the plan.** Tuned nodes
+pin every benchmark to a core the kernel isolates, in a cgroup of its own;
+default nodes are the same machine type with nothing tuned. A noise source on
+core 0 is switched on and off for the whole fleet, alternating per profile.
+
+<!-- evidence:gcp_isolation -->
+| nodes | noise on the system core | runs | not succeeded | median of per-profile median CV |
+| --- | --- | ---: | ---: | ---: |
+| tuned | off | 120 | 0 | 0.9% |
+| tuned | on | 120 | 0 | 1.0% |
+| default | off | 120 | 0 | 0.5% |
+| default | on | 120 | 0 | 0.9% |
+
+| rig | tuning | median CV, noise off | p90 CV, noise off | median CV, noise on | p90 CV, noise on |
+| --- | --- | ---: | ---: | ---: | ---: |
+| benchgrid-rig-default-0 | default | 0.5% | 1.1% | 0.8% | 2.1% |
+| benchgrid-rig-tuned-0 | tuned | 0.5% | 1.0% | 0.6% | 1.3% |
+| benchgrid-rig-tuned-1 | tuned | 0.8% | 2.0% | 0.7% | 1.3% |
+| benchgrid-rig-tuned-3 | tuned | 3.1% | 6.3% | 2.4% | 4.6% |
+<!-- /evidence:gcp_isolation -->
+
+Isolation did not reduce variation on these VMs: with one thread per core,
+both classes were already well under one percent, and the rig by rig numbers
+show the largest effect is one VM several times noisier than identical peers,
+which nothing set inside a VM can fix. So benchgrid now measures it.
+
+**Noisy rigs, benched.** Every idle agent runs a fixed calibration canary on
+its bench core and reports the spread; a spec that sets `max_rig_noise_cv` is
+never placed on a rig noisier than that, or on one not yet measured. Jobs with
+and without that limit, interleaved on the same fleet:
+
+<!-- evidence:gcp_canary -->
+| rig | canary CV, median and range | jobs placed with `max_rig_noise_cv` 1% | jobs placed with no limit |
+| --- | --- | ---: | ---: |
+| benchgrid-rig-default-0 | 0.65% (0.31% to 1.54%, 4 readings) | 15 | 6 |
+| benchgrid-rig-tuned-0 | 0.33% (0.31% to 0.36%, 4 readings) | 12 | 8 |
+| benchgrid-rig-tuned-1 | 0.47% (0.44% to 0.66%, 4 readings) | 13 | 7 |
+| benchgrid-rig-tuned-3 | 1.96% (0.43% to 2.05%, 4 readings) | 0 | 19 |
+
+40 of 40 limited jobs and 40 of 40 unlimited ones succeeded.
+<!-- /evidence:gcp_canary -->
+
+**Scale.**
+
+<!-- evidence:gcp_scale -->
+| | |
+| --- | ---: |
+| jobs | 12,000 |
+| outcomes | 12,000 SUCCEEDED |
+| succeeded | 100.00% |
+| throughput | 200 jobs/minute |
+| lease to finished, median and p95 | 1.1 s and 1.3 s |
+| wall clock | 3601.6 s |
+
+Every job was submitted at once, so queue wait measures the backlog draining
+(median 1730.9 s), not the scheduler: a job's own time from lease to finished,
+including preflight, the run, and sealing its results in Cloud Storage, is
+the row above.
+<!-- /evidence:gcp_scale -->
+
+Every one of those runs is also in BigQuery, loaded by `benchgrid-bq` into
+tables partitioned by day and clustered by benchmark, hardware class and
+metric.
+
+<!-- evidence:gcp_bigquery -->
+The tables hold 14688 runs, 14676 of them succeeded, from 5 rigs across 33
+benchmarks. The last export verified every attempt against its manifest
+before loading it and found 0 corrupt; the queries and what they returned
+are in `bigquery/`.
+<!-- /evidence:gcp_bigquery -->
 
 ## How the guarantee works
 

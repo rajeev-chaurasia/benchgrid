@@ -281,69 +281,6 @@ func render(dir string) (map[string]string, error) {
 		fmt.Fprintf(&n, "| %s | %d | %d | %s | %s |\n", row.label, row.c.Succeeded, row.c.Invalid, pct(row.c.MedianCV), ms(row.c.MedianOfMedians))
 	}
 	b["noise"] = n.String()
-	var cn canarySummary
-	if err := evidence.ReadJSON(filepath.Join(dir, "canary", "summary.json"), &cn); err == nil {
-		var t strings.Builder
-		fmt.Fprintf(&t, "| rig | canary CV, median and range | jobs placed with `max_rig_noise_cv` %.0f%% | jobs placed with no limit |\n| --- | --- | ---: | ---: |\n", cn.Limit*100)
-		rigs := map[string]bool{}
-		for r := range cn.Canary {
-			rigs[r] = true
-		}
-		for _, m := range cn.Placements {
-			for r := range m {
-				rigs[r] = true
-			}
-		}
-		names := make([]string, 0, len(rigs))
-		for r := range rigs {
-			names = append(names, r)
-		}
-		sort.Strings(names)
-		for _, r := range names {
-			c := cn.Canary[r]
-			fmt.Fprintf(&t, "| %s | %.2f%% (%.2f%% to %.2f%%, %d readings) | %d | %d |\n", r, c.Median*100, c.Min*100, c.Max*100, c.Observations, cn.Placements["limited"][r], cn.Placements["unlimited"][r])
-		}
-		total := func(m map[string]int) (n int) {
-			for _, v := range m {
-				n += v
-			}
-			return
-		}
-		fmt.Fprintf(&t, "\n%d of %d limited jobs and %d of %d unlimited ones succeeded.\n",
-			cn.States["limited"]["SUCCEEDED"], total(cn.States["limited"]), cn.States["unlimited"]["SUCCEEDED"], total(cn.States["unlimited"]))
-		b["gcp_canary"] = t.String()
-	}
-
-	var gp gpuSummary
-	if err := evidence.ReadJSON(filepath.Join(dir, "gpu", "summary.json"), &gp); err == nil {
-		var t strings.Builder
-		fmt.Fprintf(&t, "On a real %s, not emulated. Before each run the agent read the GPU's\n"+
-			"temperature at %s and its utilization at %s through nvidia-smi, and would\n"+
-			"have waited or refused above 85 C or 10%%.\n\n", gp.GPU, rangeOf(gp.PreflightTemp, "%.0f C"), rangeOf(gp.PreflightUtil, "%.0f%%", 100))
-		t.WriteString("| batch of frames | runs | not succeeded | GPU time per forward pass | frames per second | median CV |\n| --- | ---: | ---: | ---: | ---: | ---: |\n")
-		for _, size := range []string{"small", "medium", "large"} {
-			c := gp.Sizes[size]
-			label := map[string]string{"small": "4 at 192x192", "medium": "8 at 256x256", "large": "16 at 320x320"}[size]
-			ms, fps := "n/a", "n/a"
-			if c.MedianMS != nil {
-				ms = fmt.Sprintf("%.2f ms", *c.MedianMS)
-			}
-			if c.MedianFPS != nil {
-				fps = fmt.Sprintf("%.0f", *c.MedianFPS)
-			}
-			fmt.Fprintf(&t, "| %s | %d | %d | %s | %s | %s |\n", label, c.Runs, c.NotSucceeded, ms, fps, pct(c.MedianCV))
-		}
-		t.WriteString("\n| gate comparison on the GPU | verdict | change | 95% interval | pairs |\n| --- | --- | ---: | --- | ---: |\n")
-		for _, g := range gp.Gates {
-			ch, iv := "n/a", "n/a"
-			if g.Ratio != nil {
-				ch = fmt.Sprintf("%+.1f%%", (*g.Ratio-1)*100)
-				iv = fmt.Sprintf("%+.1f%% to %+.1f%%", (*g.Low-1)*100, (*g.High-1)*100)
-			}
-			fmt.Fprintf(&t, "| %s | %s | %s | %s | %d |\n", g.Label, g.Verdict, ch, iv, g.Pairs)
-		}
-		b["gcp_gpu"] = t.String()
-	}
 	return b, nil
 }
 
@@ -496,9 +433,9 @@ func renderGCP(dir string) (map[string]string, error) {
 		var t strings.Builder
 		fmt.Fprintf(&t, "%d comparisons over the 30 avbench profiles on tuned nodes: %d null, where\n"+
 			"baseline and candidate are the same binary, and %d with an injected slowdown.\n"+
-			"%d runs, %d of them reruns of a run noisier than 5%%; %d of %d pairs ran on\n"+
-			"one rig.\n\n", g.Comparisons, g.NullComparisons, g.InjectedComparisons, g.Runs, g.Reruns, g.PairsOnOneRig, g.Pairs)
-		t.WriteString("| comparison | runs | REGRESSION | PASS | INCONCLUSIVE | other |\n| --- | ---: | ---: | ---: | ---: | ---: |\n")
+			"%s runs, %d of them reruns of a run noisier than 5%%; %d of %d pairs ran on\n"+
+			"one rig.\n\n", g.Comparisons, g.NullComparisons, g.InjectedComparisons, comma(g.Runs), g.Reruns, g.PairsOnOneRig, g.Pairs)
+		t.WriteString("| comparison | comparisons | REGRESSION | PASS | INCONCLUSIVE | other |\n| --- | ---: | ---: | ---: | ---: | ---: |\n")
 		keys := make([]string, 0, len(g.BySize))
 		for k := range g.BySize {
 			keys = append(keys, k)
@@ -575,6 +512,84 @@ func renderGCP(dir string) (map[string]string, error) {
 			comma(sc.Jobs), strings.Join(states, ", "), rate, perMin, secs(sc.LeaseToFinish.P50), secs(sc.LeaseToFinish.P95), secs(sc.WallSeconds))
 		fmt.Fprintf(&t, "\nEvery job was submitted at once, so queue wait measures the backlog draining\n(median %s), not the scheduler: a job's own time from lease to finished,\nincluding preflight, the run, and sealing its results in Cloud Storage, is\nthe row above.\n", secs(sc.QueueWait.P50))
 		b["gcp_scale"] = t.String()
+	}
+	var cn canarySummary
+	if err := evidence.ReadJSON(filepath.Join(dir, "canary", "summary.json"), &cn); err == nil {
+		var t strings.Builder
+		fmt.Fprintf(&t, "| rig | canary CV, median and range | jobs placed with `max_rig_noise_cv` %.0f%% | jobs placed with no limit |\n| --- | --- | ---: | ---: |\n", cn.Limit*100)
+		rigs := map[string]bool{}
+		for r := range cn.Canary {
+			rigs[r] = true
+		}
+		for _, m := range cn.Placements {
+			for r := range m {
+				rigs[r] = true
+			}
+		}
+		names := make([]string, 0, len(rigs))
+		for r := range rigs {
+			names = append(names, r)
+		}
+		sort.Strings(names)
+		for _, r := range names {
+			c := cn.Canary[r]
+			fmt.Fprintf(&t, "| %s | %.2f%% (%.2f%% to %.2f%%, %d readings) | %d | %d |\n", r, c.Median*100, c.Min*100, c.Max*100, c.Observations, cn.Placements["limited"][r], cn.Placements["unlimited"][r])
+		}
+		total := func(m map[string]int) (n int) {
+			for _, v := range m {
+				n += v
+			}
+			return
+		}
+		fmt.Fprintf(&t, "\n%d of %d limited jobs and %d of %d unlimited ones succeeded.\n",
+			cn.States["limited"]["SUCCEEDED"], total(cn.States["limited"]), cn.States["unlimited"]["SUCCEEDED"], total(cn.States["unlimited"]))
+		b["gcp_canary"] = t.String()
+	}
+
+	var gp gpuSummary
+	if err := evidence.ReadJSON(filepath.Join(dir, "gpu", "summary.json"), &gp); err == nil {
+		var t strings.Builder
+		fmt.Fprintf(&t, "On a real %s, not emulated. Before each run the agent read the GPU's\n"+
+			"temperature at %s and its utilization at %s through nvidia-smi, and would\n"+
+			"have waited or refused above 85 C or 10%%.\n\n", gp.GPU, rangeOf(gp.PreflightTemp, "%.0f C"), rangeOf(gp.PreflightUtil, "%.0f%%", 100))
+		t.WriteString("| batch of frames | runs | not succeeded | GPU time per forward pass | frames per second | median CV |\n| --- | ---: | ---: | ---: | ---: | ---: |\n")
+		for _, size := range []string{"small", "medium", "large"} {
+			c := gp.Sizes[size]
+			label := map[string]string{"small": "4 at 192x192", "medium": "8 at 256x256", "large": "16 at 320x320"}[size]
+			ms, fps := "n/a", "n/a"
+			if c.MedianMS != nil {
+				ms = fmt.Sprintf("%.2f ms", *c.MedianMS)
+			}
+			if c.MedianFPS != nil {
+				fps = fmt.Sprintf("%.0f", *c.MedianFPS)
+			}
+			fmt.Fprintf(&t, "| %s | %d | %d | %s | %s | %s |\n", label, c.Runs, c.NotSucceeded, ms, fps, pct(c.MedianCV))
+		}
+		t.WriteString("\n| gate comparison on the GPU | verdict | change | 95% interval | pairs |\n| --- | --- | ---: | --- | ---: |\n")
+		for _, g := range gp.Gates {
+			ch, iv := "n/a", "n/a"
+			if g.Ratio != nil {
+				ch = fmt.Sprintf("%+.1f%%", (*g.Ratio-1)*100)
+				iv = fmt.Sprintf("%+.1f%% to %+.1f%%", (*g.Low-1)*100, (*g.High-1)*100)
+			}
+			fmt.Fprintf(&t, "| %s | %s | %s | %s | %d |\n", g.Label, g.Verdict, ch, iv, g.Pairs)
+		}
+		b["gcp_gpu"] = t.String()
+	}
+	var totals []map[string]string
+	var report struct {
+		LoadedRuns    int      `json:"loaded_runs"`
+		LoadedSamples int      `json:"loaded_samples"`
+		Already       int      `json:"already_present"`
+		Corrupt       []string `json:"corrupt"`
+	}
+	if evidence.ReadJSON(filepath.Join(dir, "bigquery", "totals.json"), &totals) == nil && len(totals) == 1 &&
+		evidence.ReadJSON(filepath.Join(dir, "bigquery", "export_report.json"), &report) == nil {
+		t := totals[0]
+		b["gcp_bigquery"] = fmt.Sprintf("The tables hold %s runs, %s of them succeeded, from %s rigs across %s\n"+
+			"benchmarks. The last export verified every attempt against its manifest\n"+
+			"before loading it and found %d corrupt; the queries and what they returned\n"+
+			"are in `bigquery/`.\n", t["runs"], t["succeeded"], t["rigs"], t["benchmarks"], len(report.Corrupt))
 	}
 	return b, nil
 }

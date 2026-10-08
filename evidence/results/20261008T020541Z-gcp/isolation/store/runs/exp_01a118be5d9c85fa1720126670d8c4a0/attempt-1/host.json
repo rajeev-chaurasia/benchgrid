@@ -1,0 +1,17 @@
+{
+  "kernel_cmdline": "BOOT_IMAGE=/boot/vmlinuz-6.1.0-53-cloud-amd64 root=PARTUUID=e57b3c39-1d67-47c1-87b4-30a054327445 ro console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 consoleblank=0 intel_iommu=off",
+  "isolated_cpus": [],
+  "nohz_full_cpus": [],
+  "transparent_hugepages": "always",
+  "aslr": "2",
+  "swappiness": "60",
+  "cgroup_v2": true,
+  "clock_synced": true,
+  "clock_offset_ms": 0.003292,
+  "clock_error_bound_ms": 0.39819299999999996,
+  "clock_source": "tsc",
+  "bench_cpus": [],
+  "isolated_bench": false,
+  "bench_cgroup": "",
+  "pinned": false
+}

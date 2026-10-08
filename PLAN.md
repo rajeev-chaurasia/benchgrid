@@ -48,6 +48,22 @@ than left as first written. The substantive changes:
   failures left no diagnostics, there was no perf collector and so no profiler
   failure to test, and nothing partitioned a rig from the network. Each is now
   built and tested, and the Linux run partitions rigs while it measures.
+- **The GCP fleet corrected the design several times, each from a measured
+  failure.** The scratch image had no CA roots, so the control plane could
+  not reach Cloud Storage. The pin shim set CPU affinity before joining the
+  bench cgroup, which the kernel refuses. Debian's chrony synced bench nodes
+  to pool servers through NAT, 53 ms off with 13 s of dispersion, and the
+  clock check compared only the offset; nodes now sync to Google's metadata
+  server and the check uses chrony's full error bound, and an agent does not
+  start until the bound is under 5 ms, after one node advertised itself with
+  a 62 second bound. n2 was out of capacity in every us-west1 zone, so bench
+  nodes are n2d, and no GPU was free in us-west1, so the GPU node ran in
+  us-central1.
+- **Kernel isolation did not show the benefit it was built for.** On VMs with
+  one thread per core both classes were under one percent, and one VM was
+  several times noisier than its identical peers. That finding produced the
+  calibration canary and the scheduler's rig noise limit, which kept every
+  limited job off that VM in the canary study.
 - **Several known misses were closed rather than listed:** an orphaned
   benchmark's lifetime is recorded, reused process group ids are detected, an
   unrecorded launch quarantines the rig, every GPU is read, and the fence

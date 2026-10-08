@@ -1,0 +1,17 @@
+{
+  "kernel_cmdline": "BOOT_IMAGE=/boot/vmlinuz-6.8.0-1069-gcp root=PARTUUID=9baaa44a-1023-4428-b135-04d84ba85a61 ro console=ttyS0,115200 panic=-1",
+  "isolated_cpus": [],
+  "nohz_full_cpus": [],
+  "transparent_hugepages": "madvise",
+  "aslr": "2",
+  "swappiness": "60",
+  "cgroup_v2": true,
+  "clock_synced": true,
+  "clock_offset_ms": 0.008172,
+  "clock_error_bound_ms": 0.24422950000000002,
+  "clock_source": "tsc",
+  "bench_cpus": [],
+  "isolated_bench": false,
+  "bench_cgroup": "",
+  "pinned": false
+}

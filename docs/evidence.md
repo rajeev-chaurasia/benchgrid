@@ -161,6 +161,11 @@ one more residual block per stage.
 ended well, how long they queued, and how many the fleet completed per minute,
 from the control plane's own timestamps.
 
+**bigquery.** The exporter's report and three queries with what they
+returned. Unlike everything else here, these cannot be recomputed in CI,
+which has no access to the warehouse; they are a record of what the tables
+held, and the queries are there to be run again by anyone who has.
+
 ## What none of this shows
 
 See `known-misses.md`. In short: no physical rig and no GPU took part, the
