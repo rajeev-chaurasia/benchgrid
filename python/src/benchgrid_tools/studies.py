@@ -381,6 +381,61 @@ def summarize_gpu(records: list[dict], gates: list[dict], store: Path) -> dict:
     }
 
 
+# ---- canary -----------------------------------------------------------------------
+
+
+def canary(a: argparse.Namespace) -> int:
+    """Interleaves jobs that set max_rig_noise_cv with identical jobs that do
+    not, and records where each landed, beside every canary the rigs reported
+    while it ran."""
+    client = Client(a.api)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    sha = client.upload_blob(Path(a.binary).read_bytes())
+    profiles = a.profiles.split(",")
+    ids = []
+    for i in range(a.jobs):
+        for limited in (True, False):
+            spec = avbench_spec(profiles[i % len(profiles)], a.revision, TUNED, 0, a.reps, False)
+            spec["requirements"] = {"os": "linux"}
+            if limited:
+                spec["environment"]["max_rig_noise_cv"] = a.limit
+            spec["artifacts"]["binary_sha256"] = sha
+            ids.append((limited, client.submit(spec, f"canary-{a.tag}-{i}-{limited}")))
+    with ThreadPoolExecutor(16) as pool, (out / "jobs.jsonl").open("w") as f:
+        recs = []
+        for (limited, _), rec in zip(ids, pool.map(lambda x: fetch_run(client, x[1], None), ids)):
+            rec["limited"] = limited
+            recs.append(rec)
+            f.write(json.dumps(rec) + "\n")
+    obs_path = out / "observations.jsonl"
+    obs = [json.loads(l) for l in obs_path.read_text().splitlines() if l] if obs_path.exists() else []
+    summary = summarize_canary(recs, obs, a.limit)
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def summarize_canary(recs: list[dict], obs: list[dict], limit: float) -> dict:
+    placed: dict[str, dict[str, int]] = {"limited": {}, "unlimited": {}}
+    states: dict[str, dict[str, int]] = {"limited": {}, "unlimited": {}}
+    for r in recs:
+        k = "limited" if r["limited"] else "unlimited"
+        states[k][r["state"]] = states[k].get(r["state"], 0) + 1
+        if r.get("rig"):
+            placed[k][r["rig"]] = placed[k].get(r["rig"], 0) + 1
+    canaries: dict[str, list[float]] = {}
+    for o in obs:
+        canaries.setdefault(o["rig"], []).append(o["canary_cv"])
+    return {
+        "limit": limit,
+        "placements": {k: dict(sorted(v.items())) for k, v in placed.items()},
+        "states": states,
+        "canary": {rig: {"observations": len(v), "min": min(v), "median": float(np.median(v)), "max": max(v)}
+                   for rig, v in sorted(canaries.items())},
+    }
+
+
 # ---- validation -------------------------------------------------------------------
 
 
@@ -402,6 +457,13 @@ def validate(a: argparse.Namespace) -> int:
             bad.append("scale summary does not match its jobs")
     if (root / "gate" / "summary.json").exists():
         bad += validate_gate(root / "gate")
+    if (root / "canary" / "summary.json").exists():
+        d = root / "canary"
+        recs = [json.loads(l) for l in (d / "jobs.jsonl").read_text().splitlines() if l]
+        obs = [json.loads(l) for l in (d / "observations.jsonl").read_text().splitlines() if l]
+        pub = json.loads((d / "summary.json").read_text())
+        if summarize_canary(recs, obs, pub["limit"]) != pub:
+            bad.append("canary summary does not match its jobs and observations")
     if (root / "gpu" / "summary.json").exists():
         d = root / "gpu"
         recs = [json.loads(l) for l in (d / "runs.jsonl").read_text().splitlines() if l]
@@ -476,7 +538,7 @@ def env(a: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="benchgrid-study", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("isolation", "scale", "gpu"):
+    for name in ("isolation", "scale", "gpu", "canary"):
         s = sub.add_parser(name)
         s.add_argument("--api", required=True)
         s.add_argument("--project", required=True)
@@ -489,7 +551,8 @@ def main(argv: list[str] | None = None) -> int:
         s.add_argument("--warmups", type=int, default=3)
         s.add_argument("--reps", type=int, default=20)
         s.add_argument("--runs", type=int, default=4, help="isolation: runs per profile, class and condition")
-        s.add_argument("--jobs", type=int, default=12000, help="scale: how many jobs")
+        s.add_argument("--jobs", type=int, default=12000, help="scale: how many jobs; canary: how many of each kind")
+        s.add_argument("--limit", type=float, default=0.01, help="canary: the max_rig_noise_cv the limited jobs set")
     v = sub.add_parser("validate")
     v.add_argument("dir")
     e = sub.add_parser("env")
@@ -500,7 +563,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--note", action="append")
     e.add_argument("--out", required=True)
     a = p.parse_args(argv)
-    return {"isolation": isolation, "scale": scale, "gpu": gpu, "validate": validate, "env": env}[a.cmd](a)
+    return {"isolation": isolation, "scale": scale, "gpu": gpu, "canary": canary, "validate": validate, "env": env}[a.cmd](a)
 
 
 if __name__ == "__main__":
