@@ -479,9 +479,10 @@ func renderGCP(dirs []string) (map[string]string, error) {
 	if err := evidence.ReadJSON(find("hil/summary.json"), &hil); err == nil {
 		b["gcp_hil"] = renderHIL(hil)
 	}
-	var gs gateSummary
-	if err := evidence.ReadJSON(find("gate_strict/summary.json"), &gs); err == nil {
-		b["gcp_gate_strict"] = renderGate(gs)
+	var soft, strict gateSummary
+	if evidence.ReadJSON(find("gate_soft/summary.json"), &soft) == nil &&
+		evidence.ReadJSON(find("gate_strict/summary.json"), &strict) == nil {
+		b["gcp_gate_ab"] = renderGateAB(soft, strict)
 	}
 
 	var sc scaleSummary
@@ -704,4 +705,34 @@ func cellOrder[V any](cells map[string]V) []string {
 		return ni == "quiet" && nj != "quiet"
 	})
 	return keys
+}
+
+// renderGateAB sets two evaluations that ran at the same time on the same
+// rigs side by side, so the difference between them is the configuration.
+func renderGateAB(soft, strict gateSummary) string {
+	var t strings.Builder
+	t.WriteString("| | soft affinity, no noise limit | strict pairs, noisy rigs excluded |\n| --- | ---: | ---: |\n")
+	row := func(label string, f func(g gateSummary) string) {
+		fmt.Fprintf(&t, "| %s | %s | %s |\n", label, f(soft), f(strict))
+	}
+	row("comparisons", func(g gateSummary) string { return fmt.Sprint(g.Comparisons) })
+	row("pairs on one rig", func(g gateSummary) string { return fmt.Sprintf("%d of %d", g.PairsOnOneRig, g.Pairs) })
+	row("false alarms on null comparisons", func(g gateSummary) string {
+		return fmt.Sprintf("%d of %d (%.1f%%)", g.FalseAlarms, g.NullComparisons, 100*float64(g.FalseAlarms)/float64(max(1, g.NullComparisons)))
+	})
+	row("null comparisons inconclusive", func(g gateSummary) string {
+		return fmt.Sprintf("%d of %d", g.BySize["null"]["INCONCLUSIVE"], g.NullComparisons)
+	})
+	row("injected regressions caught", func(g gateSummary) string { return fmt.Sprintf("%d of %d", g.InjectedCaught, g.InjectedComparisons) })
+	for _, k := range []string{"3%", "5%", "8%", "12%"} {
+		row("caught at "+k, func(g gateSummary) string {
+			total := 0
+			for _, n := range g.BySize[k] {
+				total += n
+			}
+			return fmt.Sprintf("%d of %d", g.BySize[k]["REGRESSION"], total)
+		})
+	}
+	row("runs, and reruns for noise", func(g gateSummary) string { return fmt.Sprintf("%s, %d", comma(g.Runs), g.Reruns) })
+	return t.String()
 }
