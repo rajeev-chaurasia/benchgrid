@@ -1,0 +1,8 @@
+#!ipxe
+# Served over TFTP to the rig's PXE firmware. Everything after this comes
+# over HTTP from the boot server, 10.0.2.2 being the host as QEMU's user
+# network sees it.
+dhcp
+kernel http://10.0.2.2:8000/vmlinuz console=ttyS0 quiet benchgrid.rig=pxe-rig-0 benchgrid.control=http://10.0.2.2:18080 benchgrid.endpoint=http://127.0.0.1:19090
+initrd http://10.0.2.2:8000/initramfs.cpio.gz
+boot

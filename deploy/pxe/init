@@ -1,0 +1,16 @@
+#!/bin/busybox sh
+# /init of the PXE initramfs: bring the network up and become the rig agent.
+/bin/busybox --install -s /bin
+mkdir -p /proc /sys /dev /tmp /var/lib/benchgrid
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+for m in /lib/modules/*.ko; do insmod "$m" 2>/dev/null; done
+ip link set lo up
+ip link set eth0 up
+udhcpc -i eth0 -s /bin/udhcpc.sh -q
+arg() { sed -n "s/.*$1=\([^ ]*\).*/\1/p" /proc/cmdline; }
+echo "benchgrid: starting rig $(arg benchgrid.rig) against $(arg benchgrid.control)"
+exec /bin/rigagent -id "$(arg benchgrid.rig)" -state-dir /var/lib/benchgrid \
+  -control "$(arg benchgrid.control)" -listen :9090 -endpoint "$(arg benchgrid.endpoint)" \
+  -hardware-class pxe-qemu -canary-every 0
