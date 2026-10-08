@@ -32,6 +32,10 @@ class Config:
     max_cv: float = 0.05
     max_reruns: int = 2
     timeout: float = 1800
+    # Strict affinity makes a pair wait for its rig; a rig noise limit keeps
+    # both runs off rigs whose calibration canary is noisier than this.
+    strict_affinity: bool = False
+    max_rig_noise_cv: float | None = None
 
 
 @dataclass
@@ -84,7 +88,12 @@ def _run(client: Client, spec: dict, key: str, cfg: Config, side: str) -> tuple[
 def compare(client: Client, baseline: dict, candidate: dict, cfg: Config) -> Result:
     cmp_id = uuid.uuid4().hex[:12]
     baseline, candidate = copy.deepcopy(baseline), copy.deepcopy(candidate)
-    baseline["affinity"] = candidate["affinity"] = f"cmp-{cmp_id}"
+    for spec in (baseline, candidate):
+        spec["affinity"] = f"cmp-{cmp_id}"
+        if cfg.strict_affinity:
+            spec["affinity_strict"] = True
+        if cfg.max_rig_noise_cv is not None:
+            spec.setdefault("environment", {})["max_rig_noise_cv"] = cfg.max_rig_noise_cv
     pairs: list[tuple[list[float], list[float]]] = []
     runs: list[Run] = []
     estimate = None

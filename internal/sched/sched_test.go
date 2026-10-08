@@ -452,3 +452,29 @@ func TestNoisyAndUnmeasuredRigsAreNotOffered(t *testing.T) {
 		t.Errorf("placed %+v", placed)
 	}
 }
+
+// A strict pair waits for its rig while that rig is busy and alive, and goes
+// elsewhere once the rig is no longer alive.
+func TestStrictAffinityWaitsForItsRig(t *testing.T) {
+	db := testdb.Open(t, "sched")
+	a := newFakeAgent(t, true, "")
+	addRig(t, db, capability.Rig{RigID: "r1", Emulated: true, Endpoint: a.srv.URL})
+	addRig(t, db, capability.Rig{RigID: "r2", Emulated: true, Endpoint: a.srv.URL})
+	db.Exec(ctx, `UPDATE rigs SET last_released_at = clock_timestamp() WHERE id = 'r2'`)
+	sp := baseSpec()
+	sp.Affinity, sp.AffinityStrict = "pair-1", true
+	submit(t, db, "exp_s1", sp, 3)
+	sc := New(Config{ID: "t"}, db, nil)
+	p1, _ := sc.Place(ctx)
+	if len(p1) != 1 || p1[0].Rig.RigID != "r1" {
+		t.Fatalf("%+v", p1)
+	}
+	submit(t, db, "exp_s2", sp, 3)
+	if p2, _ := sc.Place(ctx); len(p2) != 0 {
+		t.Fatalf("strict pair went to %s instead of waiting for r1", p2[0].Rig.RigID)
+	}
+	db.Exec(ctx, `UPDATE rigs SET last_heartbeat = clock_timestamp() - interval '1 hour' WHERE id = 'r1'`)
+	if p3, _ := sc.Place(ctx); len(p3) != 1 || p3[0].Rig.RigID != "r2" {
+		t.Errorf("strict pair waited for a dead rig: %+v", p3)
+	}
+}

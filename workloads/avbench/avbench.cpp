@@ -30,6 +30,7 @@
 #include <map>
 #include <queue>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -544,8 +545,62 @@ std::map<std::string, Profile> profiles() {
 }
 
 int usage() {
-  std::fprintf(stderr, "usage: avbench --profile NAME [--seed N] [--slowdown PERCENT] [--reps N]\n       avbench --list\n");
+  std::fprintf(stderr,
+               "usage: avbench --profile NAME [--seed N] [--slowdown PERCENT] [--reps N]\n"
+               "       avbench --profile NAME --loop HZ [--cycles N] [--frames N]\n"
+               "       avbench --list\n");
   return 2;
+}
+
+// runLoop is the hardware-in-the-loop mode, with the hardware simulated: a
+// sensor at a fixed rate, standing in for the camera or lidar a real rig
+// would have attached. Every cycle wakes on an absolute schedule, processes
+// the next frame of a recording made before the loop starts, and must finish
+// within the period. The recording is a fixed number of frames generated from
+// consecutive seeds, replayed in order, so every run sees the same input.
+//
+// What a periodic stage is judged on is not its mean: it is how late it
+// starts (jitter against the ideal schedule), how long each cycle takes, and
+// how many cycles miss their deadline.
+int runLoop(const Profile& p, uint64_t seed, double hz, int cycles, int frames) {
+  using clock = std::chrono::steady_clock;
+  std::vector<std::function<void(Checksum&)>> recording;
+  recording.reserve(frames);
+  for (int f = 0; f < frames; f++) recording.push_back(p.prepare(seed + static_cast<uint64_t>(f)));
+
+  const auto period = std::chrono::nanoseconds(static_cast<int64_t>(1e9 / hz));
+  std::vector<int64_t> compute(cycles), lateness(cycles);
+  int misses = 0;
+  Checksum sum;
+  auto next = clock::now() + period;
+  for (int c = 0; c < cycles; c++) {
+    std::this_thread::sleep_until(next);
+    auto woke = clock::now();
+    Checksum frame;
+    recording[c % frames](frame);
+    auto done = clock::now();
+    sum.add(frame.h);
+    lateness[c] = std::chrono::duration_cast<std::chrono::nanoseconds>(woke - next).count();
+    compute[c] = std::chrono::duration_cast<std::chrono::nanoseconds>(done - woke).count();
+    if (done > next + period) misses++;
+    next += period;
+    // A cycle that overran does not try to catch up by running the next ones
+    // back to back, which would hide the overrun in the next cycles' jitter.
+    while (next < clock::now()) {
+      next += period;
+    }
+  }
+  auto pct = [](std::vector<int64_t> v, double q) {
+    std::sort(v.begin(), v.end());
+    return v[static_cast<size_t>(q * (v.size() - 1))];
+  };
+  std::printf("BENCHGRID_METRIC cycle_p50_ns %lld\n", static_cast<long long>(pct(compute, 0.5)));
+  std::printf("BENCHGRID_METRIC cycle_p99_ns %lld\n", static_cast<long long>(pct(compute, 0.99)));
+  std::printf("BENCHGRID_METRIC jitter_p99_ns %lld\n", static_cast<long long>(pct(lateness, 0.99)));
+  std::printf("BENCHGRID_METRIC jitter_max_ns %lld\n", static_cast<long long>(pct(lateness, 1.0)));
+  std::printf("BENCHGRID_METRIC deadline_misses %d\n", misses);
+  std::printf("BENCHGRID_CHECKSUM %016llx\n", static_cast<unsigned long long>(sum.h));
+  return 0;
 }
 
 }  // namespace
@@ -556,6 +611,8 @@ int main(int argc, char** argv) {
   double slowdown = 0;
   int repsOverride = 0;
   bool list = false;
+  double hz = 0;
+  int cycles = 200, frames = 16;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     auto val = [&]() -> const char* { return i + 1 < argc ? argv[++i] : nullptr; };
@@ -573,6 +630,18 @@ int main(int argc, char** argv) {
       const char* v = val();
       if (!v) return usage();
       slowdown = std::atof(v);
+    } else if (a == "--loop") {
+      const char* v = val();
+      if (!v) return usage();
+      hz = std::atof(v);
+    } else if (a == "--cycles") {
+      const char* v = val();
+      if (!v) return usage();
+      cycles = std::atoi(v);
+    } else if (a == "--frames") {
+      const char* v = val();
+      if (!v) return usage();
+      frames = std::atoi(v);
     } else if (a == "--reps") {
       const char* v = val();
       if (!v) return usage();
@@ -588,6 +657,10 @@ int main(int argc, char** argv) {
   }
   auto it = all.find(name);
   if (it == all.end() || slowdown < 0 || slowdown > 100) return usage();
+  if (hz > 0) {
+    if (cycles < 1 || frames < 1) return usage();
+    return runLoop(it->second, seed, hz, cycles, frames);
+  }
 
   int reps = repsOverride > 0 ? repsOverride : kReps.at(name);
   auto kernel = it->second.prepare(seed);

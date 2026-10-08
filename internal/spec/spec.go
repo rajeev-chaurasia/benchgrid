@@ -32,6 +32,12 @@ type Spec struct {
 	// candidate runs share one, so they tend to be measured on the same
 	// machine, without either being pinned to a rig by name.
 	Affinity string `json:"affinity,omitempty"`
+	// AffinityStrict makes the preference a requirement while the preferred
+	// rig is alive and busy: the experiment waits for it rather than going to
+	// another machine. A paired comparison split across two machines adds
+	// their difference to every result; the first gate evaluation had most of
+	// its pairs split that way.
+	AffinityStrict bool `json:"affinity_strict,omitempty"`
 }
 
 type Requirements struct {

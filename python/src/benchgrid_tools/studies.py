@@ -61,7 +61,7 @@ def avbench_spec(profile: str, revision: str, cls: str, warmups: int, reps: int,
 def rig_instances(project: str) -> list[tuple[str, str]]:
     out = subprocess.run(
         ["gcloud", "compute", "instances", "list", "--project", project,
-         "--filter", "labels.app=benchgrid AND labels.role=rig AND (labels.tuning=tuned OR labels.tuning=default) AND status=RUNNING",
+         "--filter", "labels.app=benchgrid AND labels.role=rig AND (labels.tuning=tuned OR labels.tuning=default OR labels.tuning=stock) AND status=RUNNING",
          "--format", "value(name,zone.basename())"],
         capture_output=True, text=True, check=True,
     ).stdout
@@ -136,8 +136,8 @@ def isolation(a: argparse.Namespace) -> int:
                 set_noise(a.project, "on" if cond == "noise" else "off")
                 ids = []
                 for k in range(a.runs):
-                    for cls in (TUNED, DEFAULT):
-                        spec = avbench_spec(profile, a.revision, cls, a.warmups, a.reps, cls == TUNED)
+                    for cls in a.classes.split(","):
+                        spec = avbench_spec(profile, a.revision, cls, a.warmups, a.reps, cls.endswith("-isolated"))
                         spec["artifacts"]["binary_sha256"] = sha
                         key = f"iso-{a.tag}-{profile}-{cond}-{cls}-{k}"
                         ids.append((cls, client.submit(spec, key, max_attempts=1)))
@@ -161,7 +161,7 @@ def summarize_isolation(records: list[dict], store: Path, metric: str) -> dict:
     median run CV, the per-profile values behind it, and how many runs did not
     succeed. A run that did not succeed contributes no CV and is counted."""
     cells: dict[str, dict] = {}
-    for cls in (TUNED, DEFAULT):
+    for cls in sorted({r["class"] for r in records}):
         for cond in ("quiet", "noise"):
             per_profile: dict[str, list[float]] = {}
             failed = 0
@@ -381,6 +381,91 @@ def summarize_gpu(records: list[dict], gates: list[dict], store: Path) -> dict:
     }
 
 
+# ---- hil --------------------------------------------------------------------------
+
+HIL_METRICS = [
+    ("cycle_p50_ns", "ns"), ("cycle_p99_ns", "ns"), ("jitter_p99_ns", "ns"),
+    ("jitter_max_ns", "ns"), ("deadline_misses", "count"),
+]
+
+
+def hil_spec(profile: str, revision: str, cls: str, hz: float, cycles: int, reps: int) -> dict:
+    spec = avbench_spec(profile, revision, cls, 0, reps, cls.endswith("-isolated"))
+    spec["benchmark"] = f"avbench_loop_{profile}"
+    spec["command"] = ["{binary}", "--profile", profile, "--loop", f"{hz:g}", "--cycles", str(cycles)]
+    spec["timeout_seconds"] = 3600
+    spec["metrics"] = [{"name": n, "unit": u, "direction": "lower_is_better"} for n, u in HIL_METRICS]
+    return spec
+
+
+def hil(a: argparse.Namespace) -> int:
+    """The simulated sensor loop on each class, with the noise source off and
+    on, conditions alternating per kernel."""
+    client = Client(a.api)
+    out = Path(a.out)
+    (out / "store").mkdir(parents=True, exist_ok=True)
+    sha = client.upload_blob(Path(a.binary).read_bytes())
+    records = []
+    with (out / "runs.jsonl").open("w") as f:
+        for p_i, profile in enumerate(a.profiles.split(",")):
+            conditions = ["quiet", "noise"] if p_i % 2 == 0 else ["noise", "quiet"]
+            for cond in conditions:
+                set_noise(a.project, "on" if cond == "noise" else "off")
+                ids = []
+                for k in range(a.runs):
+                    for cls in a.classes.split(","):
+                        spec = hil_spec(profile, a.revision, cls, a.hz, a.cycles, a.reps)
+                        spec["artifacts"]["binary_sha256"] = sha
+                        ids.append((cls, client.submit(spec, f"hil-{a.tag}-{profile}-{cond}-{cls}-{k}", max_attempts=1)))
+                with ThreadPoolExecutor(len(ids)) as pool:
+                    got = list(pool.map(lambda x: fetch_run(client, x[1], out / "store"), ids))
+                for (cls, _), rec in zip(ids, got):
+                    rec.update({"profile": profile, "class": cls, "condition": cond})
+                    records.append(rec)
+                    f.write(json.dumps(rec) + "\n")
+                    f.flush()
+    set_noise(a.project, "off")
+    summary = summarize_hil(records, out / "store", a.hz, a.cycles)
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def summarize_hil(records: list[dict], store: Path, hz: float, cycles: int) -> dict:
+    """Per class and condition: the median over measured iterations of each
+    loop metric, and deadline misses as a fraction of every cycle run."""
+    cells = {}
+    for cls in sorted({r["class"] for r in records}):
+        for cond in ("quiet", "noise"):
+            vals: dict[str, list[float]] = {m: [] for m, _ in HIL_METRICS}
+            failed = 0
+            runs = 0
+            for r in records:
+                if r["class"] != cls or r["condition"] != cond:
+                    continue
+                runs += 1
+                if r["state"] != "SUCCEEDED":
+                    failed += 1
+                    continue
+                f = store / "runs" / r["experiment"] / f"attempt-{r['attempt']}" / "samples.jsonl"
+                for line in f.read_text().splitlines():
+                    smp = json.loads(line)
+                    if not smp["warmup"] and smp["metric"] in vals:
+                        vals[smp["metric"]].append(smp["value"])
+            iters = len(vals["deadline_misses"])
+            cells[f"{cls}/{cond}"] = {
+                "runs": runs, "not_succeeded": failed, "loop_sessions": iters,
+                "cycles": iters * cycles,
+                "deadline_misses": int(sum(vals["deadline_misses"])),
+                "miss_rate": sum(vals["deadline_misses"]) / (iters * cycles) if iters else None,
+                "median_cycle_p50_ms": float(np.median(vals["cycle_p50_ns"])) / 1e6 if iters else None,
+                "median_cycle_p99_ms": float(np.median(vals["cycle_p99_ns"])) / 1e6 if iters else None,
+                "median_jitter_p99_ms": float(np.median(vals["jitter_p99_ns"])) / 1e6 if iters else None,
+                "worst_jitter_ms": float(max(vals["jitter_max_ns"])) / 1e6 if iters else None,
+            }
+    return {"hz": hz, "cycles_per_session": cycles, "period_ms": 1000 / hz, "cells": cells}
+
+
 # ---- canary -----------------------------------------------------------------------
 
 
@@ -441,35 +526,36 @@ def summarize_canary(recs: list[dict], obs: list[dict], limit: float) -> dict:
 
 def validate(a: argparse.Namespace) -> int:
     """Recomputes each study's summary from its raw files and fails on any
-    difference, so a hand-edited number cannot survive CI."""
+    difference, so a hand-edited number cannot survive CI. A study is
+    recognised by its directory name, so a second run of a study under a new
+    name is validated like the first."""
     root = Path(a.dir)
     bad = []
-    if (root / "isolation" / "summary.json").exists():
-        d = root / "isolation"
-        recs = [json.loads(l) for l in (d / "runs.jsonl").read_text().splitlines() if l]
+
+    def lines(p: Path) -> list[dict]:
+        return [json.loads(l) for l in p.read_text().splitlines() if l]
+
+    for d in sorted(p for p in root.iterdir() if (p / "summary.json").exists()):
         pub = json.loads((d / "summary.json").read_text())
-        if summarize_isolation(recs, d / "store", pub["metric"]) != pub:
-            bad.append("isolation summary does not match its runs")
-    if (root / "scale" / "summary.json").exists():
-        d = root / "scale"
-        recs = [json.loads(l) for l in (d / "jobs.jsonl").read_text().splitlines() if l]
-        if summarize_scale(recs) != json.loads((d / "summary.json").read_text()):
-            bad.append("scale summary does not match its jobs")
-    if (root / "gate" / "summary.json").exists():
-        bad += validate_gate(root / "gate")
-    if (root / "canary" / "summary.json").exists():
-        d = root / "canary"
-        recs = [json.loads(l) for l in (d / "jobs.jsonl").read_text().splitlines() if l]
-        obs = [json.loads(l) for l in (d / "observations.jsonl").read_text().splitlines() if l]
-        pub = json.loads((d / "summary.json").read_text())
-        if summarize_canary(recs, obs, pub["limit"]) != pub:
-            bad.append("canary summary does not match its jobs and observations")
-    if (root / "gpu" / "summary.json").exists():
-        d = root / "gpu"
-        recs = [json.loads(l) for l in (d / "runs.jsonl").read_text().splitlines() if l]
-        gates = [json.loads(l) for l in (d / "comparisons.jsonl").read_text().splitlines() if l]
-        if summarize_gpu(recs, gates, d / "store") != json.loads((d / "summary.json").read_text()):
-            bad.append("gpu summary does not match its runs")
+        name = d.name
+        if name.startswith("isolation") or name.startswith("tuning"):
+            got = summarize_isolation(lines(d / "runs.jsonl"), d / "store", pub["metric"])
+        elif name.startswith("gate"):
+            bad += validate_gate(d)
+            continue
+        elif name.startswith("scale"):
+            got = summarize_scale(lines(d / "jobs.jsonl"))
+        elif name.startswith("gpu"):
+            got = summarize_gpu(lines(d / "runs.jsonl"), lines(d / "comparisons.jsonl"), d / "store")
+        elif name.startswith("canary"):
+            got = summarize_canary(lines(d / "jobs.jsonl"), lines(d / "observations.jsonl"), pub["limit"])
+        elif name.startswith("hil"):
+            got = summarize_hil(lines(d / "runs.jsonl"), d / "store", pub["hz"], pub["cycles_per_session"])
+        else:
+            bad.append(f"{name}: no validator for this study")
+            continue
+        if got != pub:
+            bad.append(f"{name} summary does not match its raw files")
     for b in bad:
         print("FAIL", b)
     print("ok" if not bad else f"{len(bad)} failures")
@@ -538,7 +624,7 @@ def env(a: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="benchgrid-study", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("isolation", "scale", "gpu", "canary"):
+    for name in ("isolation", "scale", "gpu", "canary", "hil"):
         s = sub.add_parser(name)
         s.add_argument("--api", required=True)
         s.add_argument("--project", required=True)
@@ -553,6 +639,9 @@ def main(argv: list[str] | None = None) -> int:
         s.add_argument("--runs", type=int, default=4, help="isolation: runs per profile, class and condition")
         s.add_argument("--jobs", type=int, default=12000, help="scale: how many jobs; canary: how many of each kind")
         s.add_argument("--limit", type=float, default=0.01, help="canary: the max_rig_noise_cv the limited jobs set")
+        s.add_argument("--classes", default=f"{TUNED},{DEFAULT}", help="isolation and hil: the two rig classes compared")
+        s.add_argument("--hz", type=float, default=20, help="hil: loop rate")
+        s.add_argument("--cycles", type=int, default=400, help="hil: cycles per loop session")
     v = sub.add_parser("validate")
     v.add_argument("dir")
     e = sub.add_parser("env")
@@ -563,7 +652,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--note", action="append")
     e.add_argument("--out", required=True)
     a = p.parse_args(argv)
-    return {"isolation": isolation, "scale": scale, "gpu": gpu, "canary": canary, "validate": validate, "env": env}[a.cmd](a)
+    return {"isolation": isolation, "scale": scale, "gpu": gpu, "canary": canary, "hil": hil,
+            "validate": validate, "env": env}[a.cmd](a)
 
 
 if __name__ == "__main__":

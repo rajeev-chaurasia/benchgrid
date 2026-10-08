@@ -13,15 +13,27 @@ agent_url() { cat .agent-url 2>/dev/null || { echo "run ./images.sh first" >&2; 
 
 case "${1:-}" in
 create)
+  # Modes:
+  #   tuned    one thread per core, second core isolated, benchmarks pinned
+  #   default  one thread per core, nothing isolated
+  #   stock    the machine type as GCE ships it: SMT on, nothing isolated
   count=$2 mode=$3 first=${4:-0}
   family=${RIG_MACHINE%%-*}
-  tuned=false class=$family-default
-  [ "$mode" = tuned ] && tuned=true class=$family-isolated
+  tuned=false threads=1
+  case "$mode" in
+    tuned) tuned=true class=$family-isolated ;;
+    default) class=$family-default ;;
+    stock) class=$family-stock threads=2 ;;
+    *) echo "mode must be tuned, default or stock" >&2; exit 2 ;;
+  esac
+  region=${RIG_ZONE%-*}
+  subnet=$SUBNET
+  [ "$region" != "$REGION" ] && subnet=benchgrid-$region
   names=()
-  for i in $(seq "$first" $((first + count - 1))); do names+=("benchgrid-rig-$mode-$i"); done
+  for i in $(seq "$first" $((first + count - 1))); do names+=("benchgrid-rig-$mode-$region-$i"); done
   gc compute instances create "${names[@]}" --zone "$RIG_ZONE" \
-    --machine-type "$RIG_MACHINE" --threads-per-core 1 \
-    --subnet "$SUBNET" --no-address \
+    --machine-type "$RIG_MACHINE" --threads-per-core "$threads" \
+    --subnet "$subnet" --no-address \
     --image-family debian-12 --image-project debian-cloud --boot-disk-size 20GB --boot-disk-type pd-balanced \
     --service-account "$RIG_SA" --scopes cloud-platform \
     --labels "$LABELS,role=rig,tuning=$mode" \

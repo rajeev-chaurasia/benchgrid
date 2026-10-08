@@ -93,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--isolate", action="store_true", help="require rigs that pin to isolated CPUs")
     p.add_argument("--hardware-class", default="", help="run every comparison on this class of rig")
     p.add_argument("--fetch", action="store_true", help="copy every run's sealed files into OUT/store")
+    p.add_argument("--strict-affinity", action="store_true", help="make each pair wait for its rig")
+    p.add_argument("--max-rig-noise-cv", type=float, help="keep runs off rigs whose canary is noisier")
     p.add_argument("--nulls", type=int, default=6)
     p.add_argument("--injected", default="3,5,8,12")
     p.add_argument("--injected-per-profile", type=int, default=2)
@@ -105,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     sha = client.upload_blob(Path(a.binary).read_bytes())
     profiles = a.profiles.split(",") if a.profiles else _list_profiles(a.binary)
     work = plan(profiles, a.nulls, [float(x) for x in a.injected.split(",")], a.injected_per_profile)
-    cfg = Config()
+    cfg = Config(strict_affinity=a.strict_affinity, max_rig_noise_cv=a.max_rig_noise_cv)
 
     def one(item: tuple[str, float]) -> dict:
         profile, pct = item

@@ -230,9 +230,12 @@ func (s *Scheduler) Place(ctx context.Context) (placed []placement, err error) {
 			s.m.Unplaceable.Inc()
 			continue
 		}
-		preferred, err := affinityRig(ctx, tx, q.spec.Affinity)
+		preferred, busy, err := affinityRig(ctx, tx, q.spec.Affinity, s.cfg.HeartbeatStale)
 		if err != nil {
 			return nil, err
+		}
+		if q.spec.AffinityStrict && busy && !hasRig(eligible, preferred) {
+			continue
 		}
 		rank(eligible, preferred)
 		attempt := q.attempt + 1
@@ -317,21 +320,39 @@ func quietEnough(limit, cv *float64) bool {
 }
 
 // affinityRig is the rig that most recently ran an experiment with this
-// affinity key, or none. It only orders candidates: if that rig is busy or
-// ineligible the experiment goes elsewhere rather than waiting for it.
-func affinityRig(ctx context.Context, tx pgx.Tx, key string) (string, error) {
+// affinity key, or none, and whether it is alive and busy right now. For a
+// soft preference it only orders candidates. For a strict one a busy,
+// healthy preferred rig is waited for; a preferred rig that is gone,
+// quarantined or silent is not, so a strict pair cannot wait forever.
+func affinityRig(ctx context.Context, tx pgx.Tx, key string, stale time.Duration) (string, bool, error) {
 	if key == "" {
-		return "", nil
+		return "", false, nil
 	}
 	var rig string
+	var busy bool
 	err := tx.QueryRow(ctx, `
-		SELECT a.rig_id FROM attempts a JOIN experiments e ON e.id = a.experiment_id
+		SELECT a.rig_id,
+		       COALESCE(r.agent_state = 'READY'
+		                AND r.last_heartbeat > clock_timestamp() - make_interval(secs => $2)
+		                AND r.holder IS NOT NULL AND r.expires_at > clock_timestamp(), false)
+		  FROM attempts a
+		  JOIN experiments e ON e.id = a.experiment_id
+		  LEFT JOIN rigs r ON r.id = a.rig_id
 		 WHERE e.spec->>'affinity' = $1
-		 ORDER BY a.leased_at DESC LIMIT 1`, key).Scan(&rig)
+		 ORDER BY a.leased_at DESC LIMIT 1`, key, stale.Seconds()).Scan(&rig, &busy)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
+		return "", false, nil
 	}
-	return rig, err
+	return rig, busy, err
+}
+
+func hasRig(cs []candidate, id string) bool {
+	for _, c := range cs {
+		if c.rig.RigID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func without(cs []candidate, id string) []candidate {
