@@ -77,6 +77,10 @@ type Environment struct {
 	// true time, judged by chrony's error bound and not its offset alone, so
 	// timestamps from different rigs can be lined up.
 	MaxClockOffsetMS *float64 `json:"max_clock_offset_ms,omitempty"`
+	// MaxRigNoiseCV keeps the experiment off any rig whose latest calibration
+	// canary varied more than this, or that has not run one, so a noisy
+	// machine is benched rather than allowed to widen every result it touches.
+	MaxRigNoiseCV *float64 `json:"max_rig_noise_cv,omitempty"`
 }
 
 type Metric struct {

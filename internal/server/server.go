@@ -291,6 +291,19 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if c := hb.Canary; c != nil {
+		at, err := time.Parse(time.RFC3339Nano, c.At)
+		if err != nil {
+			http.Error(w, "canary.at is not a timestamp", http.StatusBadRequest)
+			return
+		}
+		if _, err := s.DB.Exec(r.Context(), `
+			UPDATE rigs SET canary_cv = $2, canary_median_ns = $3, canary_at = $4
+			 WHERE id = $1 AND (canary_at IS NULL OR canary_at < $4)`, id, c.CV, c.MedianNS, at); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 	for _, a := range hb.Active {
 		if _, err := lease.Renew(r.Context(), s.DB, id, a.Fence, s.LeaseTTL); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -303,7 +316,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listRigs(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.DB.Query(r.Context(), `
-		SELECT id, descriptor, agent_state, agent_reason, last_heartbeat, fence, holder, experiment_id, expires_at
+		SELECT id, descriptor, agent_state, agent_reason, last_heartbeat, fence, holder, experiment_id, expires_at, canary_cv
 		  FROM rigs ORDER BY id`)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -320,11 +333,12 @@ func (s *Server) listRigs(w http.ResponseWriter, r *http.Request) {
 		Holder        *string         `json:"holder"`
 		ExperimentID  *string         `json:"experiment_id"`
 		ExpiresAt     *time.Time      `json:"expires_at"`
+		CanaryCV      *float64        `json:"canary_cv"`
 	}
 	out := []rig{}
 	for rows.Next() {
 		var x rig
-		if err := rows.Scan(&x.ID, &x.Descriptor, &x.AgentState, &x.AgentReason, &x.LastHeartbeat, &x.Fence, &x.Holder, &x.ExperimentID, &x.ExpiresAt); err != nil {
+		if err := rows.Scan(&x.ID, &x.Descriptor, &x.AgentState, &x.AgentReason, &x.LastHeartbeat, &x.Fence, &x.Holder, &x.ExperimentID, &x.ExpiresAt, &x.CanaryCV); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

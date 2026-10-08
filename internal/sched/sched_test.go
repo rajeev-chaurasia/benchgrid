@@ -427,3 +427,28 @@ func TestAffinityPrefersTheLastRig(t *testing.T) {
 		t.Errorf("did not fall back while the preferred rig was busy: %+v", p3)
 	}
 }
+
+// A spec with a rig noise limit is never placed on a rig that has no canary
+// or whose canary is noisier than the limit.
+func TestNoisyAndUnmeasuredRigsAreNotOffered(t *testing.T) {
+	db := testdb.Open(t, "sched")
+	a := newFakeAgent(t, true, "")
+	for _, r := range []string{"quiet", "noisy", "unmeasured"} {
+		addRig(t, db, capability.Rig{RigID: r, Emulated: true, Endpoint: a.srv.URL})
+	}
+	db.Exec(ctx, `UPDATE rigs SET canary_cv = 0.004 WHERE id = 'quiet'`)
+	db.Exec(ctx, `UPDATE rigs SET canary_cv = 0.04, last_released_at = 'epoch' WHERE id = 'noisy'`)
+	sp := baseSpec()
+	limit := 0.01
+	sp.Environment.MaxRigNoiseCV = &limit
+	for i := 0; i < 3; i++ {
+		submit(t, db, "exp_n"+string(rune('a'+i)), sp, 3)
+	}
+	placed, err := New(Config{ID: "t"}, db, nil).Place(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(placed) != 1 || placed[0].Rig.RigID != "quiet" {
+		t.Errorf("placed %+v", placed)
+	}
+}

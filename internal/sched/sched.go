@@ -122,6 +122,7 @@ func New(cfg Config, db *pgxpool.Pool, m *Metrics) *Scheduler {
 type candidate struct {
 	rig          capability.Rig
 	lastReleased time.Time
+	canaryCV     *float64
 }
 
 type placement struct {
@@ -221,7 +222,7 @@ func (s *Scheduler) Place(ctx context.Context) (placed []placement, err error) {
 	for _, q := range queue {
 		var eligible []candidate
 		for _, c := range free {
-			if len(capability.MatchSpec(q.spec, c.rig)) == 0 {
+			if len(capability.MatchSpec(q.spec, c.rig)) == 0 && quietEnough(q.spec.Environment.MaxRigNoiseCV, c.canaryCV) {
 				eligible = append(eligible, c)
 			}
 		}
@@ -269,7 +270,7 @@ func (s *Scheduler) Place(ctx context.Context) (placed []placement, err error) {
 
 func (s *Scheduler) freeRigs(ctx context.Context, tx pgx.Tx) ([]candidate, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT descriptor, COALESCE(last_released_at, 'epoch'::timestamptz)
+		SELECT descriptor, COALESCE(last_released_at, 'epoch'::timestamptz), canary_cv
 		  FROM rigs
 		 WHERE agent_state = 'READY'
 		   AND last_heartbeat > clock_timestamp() - make_interval(secs => $1)
@@ -282,7 +283,7 @@ func (s *Scheduler) freeRigs(ctx context.Context, tx pgx.Tx) ([]candidate, error
 	for rows.Next() {
 		var raw []byte
 		var c candidate
-		if err := rows.Scan(&raw, &c.lastReleased); err != nil {
+		if err := rows.Scan(&raw, &c.lastReleased, &c.canaryCV); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(raw, &c.rig); err != nil {
@@ -307,6 +308,12 @@ func rank(cs []candidate, preferred string) {
 		}
 		return cs[i].rig.RigID < cs[j].rig.RigID
 	})
+}
+
+// quietEnough applies a spec's rig noise limit. A rig with no canary yet is
+// not offered, because unknown is not the same as quiet.
+func quietEnough(limit, cv *float64) bool {
+	return limit == nil || (cv != nil && *cv <= *limit)
 }
 
 // affinityRig is the rig that most recently ran an experiment with this

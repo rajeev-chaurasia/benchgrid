@@ -563,3 +563,20 @@ func TestPinnedBenchmarkSeesOnlyItsCPU(t *testing.T) {
 		t.Errorf("benchmark saw %v CPUs, want 1", s.Median)
 	}
 }
+
+func TestCanaryMeasuresTheRigThroughTheRealBinary(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "rigagent")
+	if out, err := exec.Command("go", "build", "-o", bin, "../../cmd/rigagent").CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	a, err := New(Config{RigID: "rig-c", StateDir: t.TempDir(), Fenced: true, AgentBinary: bin,
+		Prober: &probe.Prober{CPUWindow: time.Millisecond}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.runCanary(context.Background())
+	hb := a.Snapshot()
+	if hb.Canary == nil || hb.Canary.CV <= 0 || hb.Canary.MedianNS <= 0 || hb.Canary.Iterations != 25 || hb.Canary.At == "" {
+		t.Fatalf("no canary in the heartbeat: %+v", hb.Canary)
+	}
+}

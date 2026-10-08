@@ -51,3 +51,9 @@ CREATE TABLE IF NOT EXISTS attempts (
     status_reason text NOT NULL DEFAULT '',
     PRIMARY KEY (experiment_id, attempt)
 );
+
+-- A rig's latest calibration canary. Added after the first schema, so it is
+-- an ALTER that every replica can run on start without coordinating.
+ALTER TABLE rigs ADD COLUMN IF NOT EXISTS canary_cv double precision;
+ALTER TABLE rigs ADD COLUMN IF NOT EXISTS canary_median_ns double precision;
+ALTER TABLE rigs ADD COLUMN IF NOT EXISTS canary_at timestamptz;

@@ -46,6 +46,16 @@ type Heartbeat struct {
 	HighFence   int64          `json:"high_fence"`
 	Active      []ActiveRun    `json:"active"`
 	Readings    probe.Readings `json:"readings"`
+	Canary      *Canary        `json:"canary,omitempty"`
+}
+
+// Canary is a rig's latest calibration: a fixed workload's spread across
+// iterations, run on the rig's bench CPUs while it was idle.
+type Canary struct {
+	CV         float64 `json:"cv"`
+	MedianNS   float64 `json:"median_ns"`
+	Iterations int     `json:"iterations"`
+	At         string  `json:"at"`
 }
 
 type Completion struct {

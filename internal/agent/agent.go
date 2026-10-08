@@ -61,6 +61,11 @@ type Config struct {
 	// shim, and Cgroups also places them in a cgroup that owns those CPUs.
 	BenchCPUs []int
 	Cgroups   bool
+	// CanaryEvery runs the calibration canary this often while the rig is
+	// idle; zero turns it off. AgentBinary is the rigagent executable the
+	// canary runs, which is this process unless a test says otherwise.
+	CanaryEvery time.Duration
+	AgentBinary string
 	// HostRoots are /proc and /sys, replaceable for tests.
 	HostRoots probe.HostRoots
 }
@@ -95,6 +100,8 @@ type Agent struct {
 
 	self        string
 	benchCgroup string
+	bin         string
+	canary      *wire.Canary
 }
 
 func New(cfg Config) (*Agent, error) {
@@ -137,6 +144,11 @@ func New(cfg Config) (*Agent, error) {
 		sessions:  map[key]*session{},
 		active:    map[*session]bool{},
 		pgroups:   map[int]*session{},
+	}
+	if a.bin = cfg.AgentBinary; a.bin == "" {
+		if a.bin, err = os.Executable(); err != nil {
+			return nil, err
+		}
 	}
 	if len(cfg.BenchCPUs) > 0 {
 		if !pinSupported() {
@@ -283,6 +295,7 @@ func (a *Agent) Snapshot() wire.Heartbeat {
 		AgentReason: a.reason,
 		HighFence:   a.fence.High(),
 		Active:      []wire.ActiveRun{},
+		Canary:      a.canary,
 	}
 	a.smu.Unlock()
 	for s := range a.active {
@@ -379,9 +392,10 @@ func (a *Agent) reapStale() error {
 
 func (a *Agent) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go func() { defer wg.Done(); a.heartbeatLoop(ctx) }()
 	go func() { defer wg.Done(); a.spoolLoop(ctx) }()
+	go func() { defer wg.Done(); a.canaryLoop(ctx) }()
 	wg.Wait()
 	return a.intervals.Close()
 }

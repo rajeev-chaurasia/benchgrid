@@ -109,3 +109,18 @@ func TestArtifactPathsAreStrict(t *testing.T) {
 		}
 	}
 }
+
+func TestHeartbeatStoresTheLatestCanary(t *testing.T) {
+	s, ts := newServer(t)
+	hb := wire.Heartbeat{Descriptor: capability.Rig{RigID: "r"}, AgentState: "READY",
+		Canary: &wire.Canary{CV: 0.031, MedianNS: 1e6, Iterations: 25, At: "2026-10-07T00:00:02.000000000Z"}}
+	post(t, ts.URL+"/v1/rigs/r/heartbeat", hb)
+	older := hb
+	older.Canary = &wire.Canary{CV: 0.001, MedianNS: 1e6, Iterations: 25, At: "2026-10-07T00:00:01.000000000Z"}
+	post(t, ts.URL+"/v1/rigs/r/heartbeat", older)
+	var cv float64
+	s.DB.QueryRow(context.Background(), `SELECT canary_cv FROM rigs WHERE id = 'r'`).Scan(&cv)
+	if cv != 0.031 {
+		t.Errorf("canary_cv %v: an older canary replaced a newer one", cv)
+	}
+}

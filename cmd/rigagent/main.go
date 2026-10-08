@@ -25,6 +25,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "canary" {
+		if err := agent.CanaryMain(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "pin" {
 		// The pin shim replaces itself with the benchmark, so it only returns
 		// on failure.
@@ -44,6 +51,7 @@ func main() {
 	timeout := flag.Duration("request-timeout", 2*time.Second, "per request timeout to the control plane; keep well inside the lease TTL")
 	unfenced := flag.Bool("unfenced-negative-control", false, "evidence harness only: accept every dispatch regardless of fence")
 	benchCPUs := flag.String("bench-cpus", "", "Linux only: pin every benchmark to these CPUs, for example 1 or 2-3")
+	canaryEvery := flag.Duration("canary-every", 10*time.Minute, "run the calibration canary this often while idle; 0 turns it off")
 	cgroups := flag.Bool("cgroups", false, "Linux only: also give benchmarks a cgroup owning the bench CPUs; needs Delegate=yes")
 	flag.Parse()
 
@@ -67,7 +75,7 @@ func main() {
 	a, err := agent.New(agent.Config{
 		RigID: *id, StateDir: *stateDir, ControlURLs: strings.Split(*control, ","),
 		Endpoint: *endpoint, Fenced: !*unfenced, Prober: prober,
-		BenchCPUs: agent.ParseCPUs(*benchCPUs), Cgroups: *cgroups,
+		BenchCPUs: agent.ParseCPUs(*benchCPUs), Cgroups: *cgroups, CanaryEvery: *canaryEvery,
 		HeartbeatEvery: *heartbeat, RequestTimeout: *timeout, IntervalLog: *intervalLog, Logger: log,
 	})
 	if err != nil {
