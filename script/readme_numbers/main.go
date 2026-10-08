@@ -281,6 +281,39 @@ func render(dir string) (map[string]string, error) {
 		fmt.Fprintf(&n, "| %s | %d | %d | %s | %s |\n", row.label, row.c.Succeeded, row.c.Invalid, pct(row.c.MedianCV), ms(row.c.MedianOfMedians))
 	}
 	b["noise"] = n.String()
+	var cn canarySummary
+	if err := evidence.ReadJSON(filepath.Join(dir, "canary", "summary.json"), &cn); err == nil {
+		var t strings.Builder
+		fmt.Fprintf(&t, "| rig | canary CV, median and range | jobs placed with `max_rig_noise_cv` %.0f%% | jobs placed with no limit |\n| --- | --- | ---: | ---: |\n", cn.Limit*100)
+		rigs := map[string]bool{}
+		for r := range cn.Canary {
+			rigs[r] = true
+		}
+		for _, m := range cn.Placements {
+			for r := range m {
+				rigs[r] = true
+			}
+		}
+		names := make([]string, 0, len(rigs))
+		for r := range rigs {
+			names = append(names, r)
+		}
+		sort.Strings(names)
+		for _, r := range names {
+			c := cn.Canary[r]
+			fmt.Fprintf(&t, "| %s | %.2f%% (%.2f%% to %.2f%%, %d readings) | %d | %d |\n", r, c.Median*100, c.Min*100, c.Max*100, c.Observations, cn.Placements["limited"][r], cn.Placements["unlimited"][r])
+		}
+		total := func(m map[string]int) (n int) {
+			for _, v := range m {
+				n += v
+			}
+			return
+		}
+		fmt.Fprintf(&t, "\n%d of %d limited jobs and %d of %d unlimited ones succeeded.\n",
+			cn.States["limited"]["SUCCEEDED"], total(cn.States["limited"]), cn.States["unlimited"]["SUCCEEDED"], total(cn.States["unlimited"]))
+		b["gcp_canary"] = t.String()
+	}
+
 	var gp gpuSummary
 	if err := evidence.ReadJSON(filepath.Join(dir, "gpu", "summary.json"), &gp); err == nil {
 		var t strings.Builder
@@ -312,6 +345,18 @@ func render(dir string) (map[string]string, error) {
 		b["gcp_gpu"] = t.String()
 	}
 	return b, nil
+}
+
+type canarySummary struct {
+	Limit      float64                   `json:"limit"`
+	Placements map[string]map[string]int `json:"placements"`
+	States     map[string]map[string]int `json:"states"`
+	Canary     map[string]struct {
+		Observations int     `json:"observations"`
+		Min          float64 `json:"min"`
+		Median       float64 `json:"median"`
+		Max          float64 `json:"max"`
+	} `json:"canary"`
 }
 
 type gpuSummary struct {
@@ -407,6 +452,10 @@ type scaleSummary struct {
 		P95 *float64 `json:"p95"`
 		Max *float64 `json:"max"`
 	} `json:"queue_wait_seconds"`
+	LeaseToFinish struct {
+		P50 *float64 `json:"p50"`
+		P95 *float64 `json:"p95"`
+	} `json:"lease_to_finish_seconds"`
 }
 
 type gcpEnv struct {
@@ -522,8 +571,9 @@ func renderGCP(dir string) (map[string]string, error) {
 		if sc.JobsPerMinute != nil {
 			perMin = fmt.Sprintf("%.0f", *sc.JobsPerMinute)
 		}
-		fmt.Fprintf(&t, "| | |\n| --- | ---: |\n| jobs | %s |\n| outcomes | %s |\n| succeeded | %s |\n| throughput | %s jobs/minute |\n| queue wait, median and p95 | %s and %s |\n| wall clock | %s |\n",
-			comma(sc.Jobs), strings.Join(states, ", "), rate, perMin, secs(sc.QueueWait.P50), secs(sc.QueueWait.P95), secs(sc.WallSeconds))
+		fmt.Fprintf(&t, "| | |\n| --- | ---: |\n| jobs | %s |\n| outcomes | %s |\n| succeeded | %s |\n| throughput | %s jobs/minute |\n| lease to finished, median and p95 | %s and %s |\n| wall clock | %s |\n",
+			comma(sc.Jobs), strings.Join(states, ", "), rate, perMin, secs(sc.LeaseToFinish.P50), secs(sc.LeaseToFinish.P95), secs(sc.WallSeconds))
+		fmt.Fprintf(&t, "\nEvery job was submitted at once, so queue wait measures the backlog draining\n(median %s), not the scheduler: a job's own time from lease to finished,\nincluding preflight, the run, and sealing its results in Cloud Storage, is\nthe row above.\n", secs(sc.QueueWait.P50))
 		b["gcp_scale"] = t.String()
 	}
 	return b, nil
